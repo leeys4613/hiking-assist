@@ -1,0 +1,39 @@
+# OS / editor
+.DS_Store
+.idea/
+*.iml
+
+# Python (server)
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.sqlite
+*.sqlite3
+*.db
+
+# Android / Gradle
+.gradle/
+build/
+local.properties
+*.keystore
+*.jks
+captures/
+
+# Secrets
+.env
+.env.*
+*.pem
+token*.txt
+
+# Claude Code / OMC local state (plans and CLAUDE.md are tracked)
+.claude/settings.local.json
+.omc/state/
+.omc/sessions/
+.omc/drafts/
+.omc/notepad.md
+.omc/project-memory.json
+
+# Raw data (large, re-downloadable)
+testdata/raw/
+server/data/raw/
