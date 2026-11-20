@@ -51,11 +51,15 @@
 ## 5. Implementation Steps
 
 ### Phase 0 — 환경 구축 + 데이터 스파이크 (선행)
-1. Homebrew 설치 → `python@3.11`, `openjdk@17`, `android-commandlinetools`, `android-platform-tools` 설치 (명세 §3.1 macOS 블록 기준, GDAL은 보류)
-2. `sdkmanager`로 `platform-tools`, `platforms;android-34`, `build-tools;34.0.0` 설치 + 라이선스 동의 (명세 §3.2)
-3. `server/.venv` 생성(3.11) 후 명세 §3.3 패키지 설치. `import geopandas, pyogrio, shapely, osmnx` 스모크 테스트로 시스템 GDAL 필요 여부 확정
+1. **Homebrew 없이 설치** (공식 설치 스크립트가 이 Intel 맥에서 "Apple Silicon만 지원" 메시지로 거부함 — 실측: i5-10600, macOS 14.1):
+   - Python 3.11: `uv` 설치(`curl -LsSf https://astral.sh/uv/install.sh | sh`) 후 `uv python install 3.11`
+   - JDK 17: Eclipse Temurin 17 macOS x64 `.pkg` (adoptium.net) — 사용자 sudo 필요
+   - Android: command-line tools zip(developer.android.com, mac)을 `~/Library/Android/sdk/cmdline-tools/latest/`에 압축 해제, `ANDROID_HOME` 설정
+   - GDAL은 보류
+2. `sdkmanager`로 `platform-tools`(adb 포함), `platforms;android-34`, `build-tools;34.0.0` 설치 + 라이선스 동의 (명세 §3.2)
+3. `server/.venv` 생성(`uv venv --python 3.11`) 후 명세 §3.3 패키지 설치(`uv pip install`). Intel mac(x86_64) 휠 제공 여부 확인. `import geopandas, pyogrio, shapely, osmnx` 스모크 테스트로 시스템 GDAL 필요 여부 확정
 4. 갤럭시(z-flip6) 개발자 옵션 + 무선/USB 디버깅 → `adb devices`에서 인식 확인
-4-1. 아이맥에 Tailscale 설치, stockRecom과 **같은 계정**으로 로그인 → 폰과 같은 tailnet 확인(`tailscale status`), MagicDNS/HTTPS 인증서 활성화 여부 확인
+4-1. **Tailscale: 이미 설치·로그인됨 (실측)** — 이 맥이 tailnet 노드 `macbookpro-2`(100.113.103.37)이고 stockRecom과 **같은 머신**임. 폰 z-flip6(100.99.120.94)도 같은 계정. → stockRecom이 Tailscale Serve 443을 이미 사용 중이므로 이 앱은 **다른 HTTPS 포트**로 노출해야 함
 4-2. `git init` + `.gitignore`(`.venv/`, `build/`, `.gradle/`, `*.keystore`, `local.properties`, 토큰/환경 파일) — git 관련 규칙은 사용자 안내 대기 중
 5. **스파이크**: 산림청 SHP 1개 산 다운로드 → 좌표계 확인 → 4326 변환 → networkx 그래프 → 연결 요소 수/고립 조각 출력 (산출물은 버림, 결과만 기록)
 - 완료 기준: `adb devices` 기기 표시, pytest 빈 테스트 통과, 스파이크 리포트 1장
@@ -68,7 +72,7 @@
 - 테스트: guidance-core JUnit(문구/반올림/쿨다운), 실기기 실산행 1회(AC3)
 
 ### Phase 2 — 서버 기본 + 웹 UI + WebView (명세 §4, §6)
-- `server/app/`: FastAPI, SQLAlchemy 모델(mountain/course/hike), `/health`, `/api/courses/{id}/package`, `POST /api/hikes`(GPX+걸음수+이벤트 로그), 정적 토큰 헤더 인증, `uvicorn --host 127.0.0.1 --port 8001`(포트는 아이맥 점유 포트 확인 후 확정) + `tailscale serve --bg http://127.0.0.1:8001`(아이맥은 별도 노드라 자체 호스트명 443 사용 가능), launchd로 상시 실행(stockRecom 방식 `caffeinate -i uvicorn` 참고)
+- `server/app/`: FastAPI, SQLAlchemy 모델(mountain/course/hike), `/health`, `/api/courses/{id}/package`, `POST /api/hikes`(GPX+걸음수+이벤트 로그), 정적 토큰 헤더 인증, `uvicorn --host 127.0.0.1 --port 8001`(8000은 stockRecom 사용 중) + `tailscale serve --bg --https=8443 http://127.0.0.1:8001` (443은 stockRecom 점유, **기존 serve 설정을 덮어쓰지 않도록 실행 전 `tailscale serve status` 확인 필수**). 접속 URL은 `https://macbookpro-2.taila5103b.ts.net:8443`, launchd로 상시 실행(stockRecom 방식 `caffeinate -i uvicorn` 참고)
 - 웹: Jinja2 + Leaflet(정적 포함) 코스 상세 + 기록 오버레이(회차별 색상)
 - 앱: WebView(`[이 코스로 출발]` → 패키지 다운로드 → 로컬 저장), WorkManager 업로드(네트워크 제약, `/health` 확인 후 업로드, 성공 시에만 "업로드 완료" 표시)
 - 접속 URL은 `https://<아이맥호스트>.<tailnet>.ts.net` 형태(HTTPS) → cleartext 예외 불필요. 앱 설정에 서버 URL을 하드코딩하지 않고 입력/저장 가능하게 함
@@ -98,6 +102,7 @@
 |---|---|---|
 | SHP 그래프가 끊겨 있어 재경로 불가 | 높음/중 | Phase 0 스파이크로 조기 발견, Phase 5는 검증 통과 산 한정(명세 §12) |
 | 삼성 절전/Doze로 백그라운드 GPS·TTS 중단 | 높음/높음 | 포그라운드 서비스 + 배터리 제한 없음 안내 + 실산행 전 집 근처 1시간 화면 꺼짐 워킹 테스트 |
+| 폰이 Android 17(SDK 37)로 명세 기준(android-34)보다 높아 백그라운드 위치/포그라운드 서비스/알림 권한 동작이 다를 수 있음 (실측: SM-F741N, ko-KR, Google TTS·Tailscale 설치됨) | 중/중 | Phase 1 초기에 권한 플로우와 화면 꺼짐 GPS 수신을 집 근처에서 먼저 검증, 문제 시 compile/targetSdk 상향 검토 |
 | 블루투스 이어폰에서 TTS 첫 음절 잘림/ducking 미동작 | 중/중 | 포커스 후 300ms 대기, 실제 이어폰으로 Phase 1에서 검증 |
 | 하드코딩→서버 패키지 전환 시 스키마 불일치 | 중/중 | Phase 1에서 패키지 JSON 스키마(`package_version`)를 확정하고 서버가 동일 스키마 생성 |
 | 파이썬/GDAL 의존성 설치 실패 | 중/낮 | Phase 0에서 3.11 venv + 스모크 테스트, 실패 시에만 GDAL brew 추가 |
@@ -110,11 +115,11 @@
 **해결됨**: VPN=Tailscale(stockRecom 방식 재사용), 대상=수락산 5코스, 아이맥=Intel.
 
 **남은 항목**
-1. **Homebrew 위치** — 사용자는 설치돼 있을 거라 했으나 `/usr/local/bin/brew`, `/opt/homebrew/bin/brew` 모두 없음. 다른 경로이거나 미설치 → Phase 0 첫 단계에서 재확인, 없으면 설치(시스템 변경이므로 승인 필요)
+1. **Homebrew 사용 불가** — 미설치였고, 공식 설치 스크립트가 이 Intel 맥(i5-10600, macOS 14.1)에서 설치를 거부함. Homebrew 없이 uv / Temurin pkg / Android cmdline-tools로 대체(Phase 0 step 1). Tailscale도 brew cask 대신 공식 pkg 또는 App Store 사용
 2. **git 규칙** — 사용자가 알려주기로 함(원격 저장소, 브랜치/커밋 규칙 등), 아직 미수신
-3. **수락산 5코스 지난주 GPX** — 파일 위치(폰/워치 앱 내보내기) 확인, Phase 1 패키지 생성 입력으로 사용
+3. **수락산 5코스 GPX 없음 (사용자 확인)** — Phase 1 하드코딩 패키지는 산림청 SHP에서 5코스 경로를 추출해 생성(Phase 0 스파이크 데이터 재사용). 첫 실산행에서 GPX를 기록해 경로 정합성을 검증. 지난주 산행을 기록한 앱이 있으면 내보내기 시도
 4. **아이맥 점유 포트** — stockRecom 답변은 다른 맥(macbookpro-2) 기준이라 아이맥에서 별도 확인
-5. 아이맥을 stockRecom과 같은 Tailscale 계정에 로그인할지 확인(같은 계정이면 폰과 자동으로 같은 tailnet)
+5. 아이맥 Tailscale: 사용자가 같은 계정 로그인으로 확정. 설치/로그인은 사용자가 GUI에서 수행(브라우저 인증 필요), 이후 `tailscale status`로 확인
 
 ## 8. Verification Steps
 

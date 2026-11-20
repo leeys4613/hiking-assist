@@ -28,9 +28,9 @@ token*.txt
 
 # Claude Code / OMC local state (plans and CLAUDE.md are tracked)
 .claude/settings.local.json
-.omc/state/
-.omc/sessions/
-.omc/drafts/
+**/.omc/state/
+**/.omc/sessions/
+**/.omc/drafts/
 .omc/notepad.md
 .omc/project-memory.json
 
