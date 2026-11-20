@@ -35,5 +35,7 @@ token*.txt
 .omc/project-memory.json
 
 # Raw data (large, re-downloadable)
+docs/mountain/
+docs/mountain.zip
 testdata/raw/
 server/data/raw/
