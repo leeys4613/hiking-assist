@@ -10,5 +10,7 @@
     <color name="primary_soft">#1D2D24</color>
     <color name="on_primary_soft">#8FC7A2</color>
     <color name="amber">#F2A93B</color>
+    <color name="amber_soft">#3A2C10</color>
+    <color name="amber_on">#F2C26B</color>
     <color name="ripple">#33FFFFFF</color>
 </resources>

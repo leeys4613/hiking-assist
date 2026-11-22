@@ -19,7 +19,8 @@ import android.widget.TextView
 /** Phase 1 화면: 권한 단계 안내, 음성 테스트, 산행 시작/시뮬레이션/종료. 웹 UI(WebView)는 Phase 2. */
 class ControlActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
-    private lateinit var info: TextView
+    private lateinit var statusBox: LinearLayout
+    private var statusKey = ""
     private var speaker: Speaker? = null
 
     private fun granted(p: String) = checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
@@ -31,8 +32,8 @@ class ControlActivity : Activity() {
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad * 2) }
         root.addView(Ui.title(this, "산행"), Ui.margins(this, bottom = 12))
         // 상태 카드: 권한·배터리·코스·업로드 상태가 한눈에 보이는 곳
-        info = TextView(this).apply { textSize = 14f; setLineSpacing(0f, 1.2f); setTextColor(getColor(R.color.fg)) }
-        root.addView(Ui.card(this).apply { addView(info) }, Ui.margins(this, bottom = 16))
+        statusBox = Ui.card(this)
+        root.addView(statusBox, Ui.margins(this, bottom = 16))
 
         fun add(v: android.view.View, bottom: Int = 8) = root.addView(v, Ui.margins(this, bottom = bottom))
         add(Ui.primaryButton(this, "산행 시작 (실제 GPS)") { startService(HikeService.ACTION_START) })
@@ -99,20 +100,72 @@ class ControlActivity : Activity() {
         val fine = granted(Manifest.permission.ACCESS_FINE_LOCATION)
         val bg = granted(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
         val notif = Build.VERSION.SDK_INT < 33 || granted(Manifest.permission.POST_NOTIFICATIONS)
-        info.text = buildString {
-            appendLine("위치(정확): ${if (fine) "허용" else "필요"}")
-            appendLine("항상 허용(백그라운드 위치): ${if (bg) "허용" else "미허용 (화면 끈 산행에 권장)"}")
-            appendLine("알림: ${if (notif) "허용" else "필요"}")
-            appendLine("음성: ${speaker?.statusText}")
-            appendLine(BatterySaver.statusText(this@ControlActivity))
-            appendLine("배터리 사용량 제한: ${if (isUnrestricted()) "제한 없음" else "제한됨 — 아래 2) 버튼으로 허용하세요"}")
-            appendLine("코스: ${courseName()}")
-            appendLine("상태: ${HikeService.status}")
-            appendLine("업로드: ${UploadWorker.lastStatus(this@ControlActivity)}")
-            appendLine()
-            appendLine("※ 삼성은 설정 > 배터리 > 백그라운드 사용 제한의 '절전 앱/잠자는 앱' 목록에도 이 앱이 없어야 해요.")
-        }
+        val unrestricted = isUnrestricted()
+        renderStatus(
+            course = courseName(), status = HikeService.status.toString(),
+            checks = listOf(
+                Check("위치(정확)", if (fine) "허용" else "필요", fine),
+                Check("항상 허용 위치", if (bg) "허용" else "미허용 · 화면 끈 산행에 권장", bg),
+                Check("알림", if (notif) "허용" else "필요", notif),
+                Check("배터리 사용량 제한", if (unrestricted) "제한 없음" else "제한됨 · 아래 2) 버튼으로 허용", unrestricted),
+            ),
+            notes = listOf("음성: ${speaker?.statusText}", BatterySaver.statusText(this)),
+            upload = UploadWorker.lastStatus(this).toString(),
+            samsungHint = !unrestricted,
+        )
         handler.postDelayed({ refresh() }, 1000)
+    }
+
+    private class Check(val label: String, val value: String, val ok: Boolean)
+
+    /** 상태 카드: 코스·상태 헤드라인, 준비 점검 행(녹색=정상, 앰버=확인 필요), 부가 정보. 내용이 같으면 다시 그리지 않는다. */
+    private fun renderStatus(course: String, status: String, checks: List<Check>, notes: List<String>, upload: String, samsungHint: Boolean) {
+        val key = listOf(course, status, checks.joinToString { "${it.value}${it.ok}" }, notes.joinToString(), upload, samsungHint).joinToString("|")
+        if (key == statusKey) return
+        statusKey = key
+        val box = statusBox
+        box.removeAllViews()
+        fun text(s: String, size: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
+            text = s; textSize = size; setTextColor(getColor(color))
+            if (bold) typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+
+        // 헤드라인: 코스 + 현재 상태 + 준비 요약 칩
+        val todo = checks.count { !it.ok }
+        val head = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        titles.addView(text(course, 17f, R.color.fg, bold = true))
+        titles.addView(text(status, 14f, R.color.muted))
+        head.addView(titles, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        head.addView(text(if (todo == 0) "준비 완료" else "확인 ${todo}", 13f, if (todo == 0) R.color.on_primary_soft else R.color.amber_on, bold = true).apply {
+            setBackgroundResource(if (todo == 0) R.drawable.bg_chip_ok else R.drawable.bg_chip_warn)
+            setPadding(dp(12), dp(5), dp(12), dp(5))
+        })
+        box.addView(head)
+
+        box.addView(android.view.View(this).apply { setBackgroundColor(getColor(R.color.line)) },
+            LinearLayout.LayoutParams(-1, dp(1)).apply { setMargins(0, dp(12), 0, dp(4)) })
+
+        for (c in checks) {
+            val line = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(6), 0, dp(6)) }
+            line.addView(android.view.View(this).apply {
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    shape = android.graphics.drawable.GradientDrawable.OVAL
+                    setColor(getColor(if (c.ok) R.color.primary else R.color.amber))
+                }
+            }, LinearLayout.LayoutParams(dp(8), dp(8)).apply { marginEnd = dp(10) })
+            line.addView(text(c.label, 14f, R.color.fg), LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+            line.addView(text(c.value, 13f, if (c.ok) R.color.muted else R.color.amber_on).apply { gravity = Gravity.END },
+                LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.2f))
+            box.addView(line)
+        }
+
+        val extra = (notes + "업로드: $upload").filter { it.isNotBlank() }
+        for (n in extra) box.addView(text(n, 12f, R.color.muted), LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(6) })
+        if (samsungHint) {
+            box.addView(text("삼성은 설정 > 배터리 > 백그라운드 사용 제한의 '절전 앱/잠자는 앱' 목록에도 이 앱이 없어야 해요.", 12f, R.color.muted),
+                LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(8) })
+        }
     }
 
     private fun isUnrestricted() =
