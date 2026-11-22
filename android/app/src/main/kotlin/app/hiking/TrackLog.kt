@@ -9,15 +9,17 @@ import java.util.Locale
 /**
  * 산행 중 위치와 안내 이벤트를 파일로 남긴다(메모리 버퍼 → 주기적 일괄 저장, 명세 §5.6).
  * 파일: Android/data/app.hiking/files/hike-YYYYMMDD-HHMMSS.log
+ *   H,courseId,startEpochMs  (첫 줄)
+ *   S,steps                   (끝)
  *   T,epochMs,lat,lon,accuracy,progressM
  *   E,epochMs,key,text
  */
-class TrackLog(ctx: Context) {
+class TrackLog(ctx: Context, courseId: String, sim: Boolean) {
     private val file = File(
         ctx.getExternalFilesDir(null) ?: ctx.filesDir,
-        "hike-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()) + ".log",
+        (if (sim) "sim-" else "hike-") + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()) + ".log",
     )
-    private val buf = StringBuilder()
+    private val buf = StringBuilder().append("H,").append(courseId).append(',').append(System.currentTimeMillis()).append('\n')
 
     val path: String get() = file.absolutePath
 
@@ -29,6 +31,8 @@ class TrackLog(ctx: Context) {
     @Synchronized fun event(t: Long, key: String, text: String) {
         buf.append("E,").append(t).append(',').append(key).append(',').append(text.replace('\n', ' ')).append('\n')
     }
+
+    @Synchronized fun steps(n: Long) { buf.append("S,").append(n).append('\n') }
 
     @Synchronized fun flush() {
         if (buf.isEmpty()) return

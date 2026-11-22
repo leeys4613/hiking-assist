@@ -1,95 +1,114 @@
 package app.hiking
 
-import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.os.Build
+import android.graphics.Bitmap
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.provider.Settings
-import android.view.Gravity
+import android.webkit.CookieManager
+import android.webkit.JavascriptInterface
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Button
+import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
+import app.hiking.guidance.CoursePackage
+import java.io.File
+import kotlin.concurrent.thread
 
-/** Phase 1 화면: 권한 단계 안내, 음성 테스트, 산행 시작/시뮬레이션/종료. 웹 UI(WebView)는 Phase 2. */
+/**
+ * 웹 UI(서버) 를 WebView 로 보여 주는 첫 화면. 코스 상세의 [이 코스로 출발] 이 JS 브리지(window.HikeApp)로
+ * 코스 패키지를 내려받아 저장하고 산행 화면(ControlActivity)으로 넘어간다.
+ */
 class MainActivity : Activity() {
-    private val handler = Handler(Looper.getMainLooper())
-    private lateinit var info: TextView
-    private var speaker: Speaker? = null
+    private lateinit var web: WebView
+    private lateinit var msg: TextView
 
-    private fun granted(p: String) = checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
-
+    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        speaker = Speaker(this)
-        val pad = (16 * resources.displayMetrics.density).toInt()
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad * 2, pad, pad) }
-        info = TextView(this).apply { textSize = 15f }
-        root.addView(TextView(this).apply { text = "등산 안내 (수락산 시험 코스)"; textSize = 20f; gravity = Gravity.START })
-        root.addView(info)
-        fun button(label: String, onClick: () -> Unit) {
-            root.addView(Button(this).apply { text = label; setOnClickListener { onClick() } })
+        val pad = (8 * resources.displayMetrics.density).toInt()
+        val bar = LinearLayout(this).apply { setPadding(pad, pad * 3, pad, 0) }
+        fun btn(label: String, f: () -> Unit) = bar.addView(Button(this).apply {
+            text = label; setOnClickListener { f() }
+        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        btn("산행 화면") { startActivity(Intent(this, ControlActivity::class.java)) }
+        btn("새로고침") { load() }
+        btn("설정") { showSettings() }
+        msg = TextView(this).apply { setPadding(pad * 2, pad, pad * 2, pad); visibility = android.view.View.GONE }
+
+        web = WebView(this).apply {
+            settings.javaScriptEnabled = true
+            settings.domStorageEnabled = true
+            addJavascriptInterface(Bridge(), "HikeApp")
+            webViewClient = object : WebViewClient() {
+                // 우리 서버 밖으로는 나가지 않는다(JS 브리지 노출 범위 제한)
+                override fun shouldOverrideUrlLoading(v: WebView, r: WebResourceRequest) =
+                    !r.url.toString().startsWith(Api.baseUrl(this@MainActivity))
+                override fun onPageStarted(v: WebView, url: String, favicon: Bitmap?) { msg.visibility = android.view.View.GONE }
+                override fun onReceivedError(v: WebView, r: WebResourceRequest, e: WebResourceError) {
+                    if (r.isForMainFrame) showMsg("서버에 연결하지 못했어요. 폰의 Tailscale이 켜져 있는지 확인하세요.\n(${e.description})")
+                }
+            }
         }
-        button("1) 권한 허용 (위치 → 알림 → 항상 허용 순서)") { requestNextPermission() }
-        button("2) 배터리 '제한 없음' 설정 열기") { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
-        button("음성 테스트 (음악 켜고 눌러 보세요)") {
-            speaker?.speak("정상까지 2.3킬로, 약 55분 남았어요. 현재 페이스 킬로당 22분이에요.") { }
-        }
-        button("산행 시작 (실제 GPS)") { startService(HikeService.ACTION_START) }
-        button("시뮬레이션 (실내 테스트, 20배속)") { startService(HikeService.ACTION_SIM) }
-        button("일시정지 / 재개") { startService(HikeService.ACTION_PAUSE) }
-        button("종료") { startService(HikeService.ACTION_STOP) }
-        setContentView(ScrollView(this).apply { addView(root) })
+        setContentView(LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(bar); addView(msg)
+            addView(web, LinearLayout.LayoutParams(-1, 0, 1f))
+        })
+        if (Api.configured(this)) load() else showSettings()
 
         // 디버그 빌드 전용: `adb shell am start -n app.hiking/.MainActivity --ez sim true` 로 시뮬레이션 자동 시작
         val debuggable = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
-        if (debuggable && intent?.getBooleanExtra("sim", false) == true) startService(HikeService.ACTION_SIM)
-    }
-
-    private fun startService(action: String) {
-        val i = Intent(this, HikeService::class.java).setAction(action)
-        if (action == HikeService.ACTION_START || action == HikeService.ACTION_SIM) startForegroundService(i) else startService(i)
-    }
-
-    /** Android 11+ 는 '항상 허용(백그라운드 위치)'을 포그라운드 위치와 따로, 나중에 요청해야 한다. */
-    private fun requestNextPermission() {
-        val first = buildList {
-            add(Manifest.permission.ACCESS_FINE_LOCATION); add(Manifest.permission.ACCESS_COARSE_LOCATION)
-            if (Build.VERSION.SDK_INT >= 33) add(Manifest.permission.POST_NOTIFICATIONS)
-            add(Manifest.permission.ACTIVITY_RECOGNITION)
-        }.filter { !granted(it) }
-        if (first.isNotEmpty()) { requestPermissions(first.toTypedArray(), 1); return }
-        if (!granted(Manifest.permission.ACCESS_BACKGROUND_LOCATION)) {
-            requestPermissions(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION), 2)
+        if (debuggable && intent?.getBooleanExtra("sim", false) == true) {
+            startForegroundService(Intent(this, HikeService::class.java).setAction(HikeService.ACTION_SIM))
         }
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        refresh()
+    private fun showMsg(s: String) { msg.text = s; msg.visibility = android.view.View.VISIBLE }
+
+    private fun load() {
+        if (!Api.configured(this)) { showSettings(); return }
+        val base = Api.baseUrl(this)
+        // 토큰을 쿠키로 심어 서버의 웹 페이지 인증을 통과한다(로그인 화면을 거치지 않음)
+        CookieManager.getInstance().setCookie(base, "hiking_token=${Api.token(this)}; Path=/; Secure; HttpOnly")
+        CookieManager.getInstance().flush()
+        web.loadUrl(base + "/")
     }
 
-    private fun refresh() {
-        val fine = granted(Manifest.permission.ACCESS_FINE_LOCATION)
-        val bg = granted(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-        val notif = Build.VERSION.SDK_INT < 33 || granted(Manifest.permission.POST_NOTIFICATIONS)
-        info.text = buildString {
-            appendLine("위치(정확): ${if (fine) "허용" else "필요"}")
-            appendLine("항상 허용(백그라운드 위치): ${if (bg) "허용" else "미허용 (화면 끈 산행에 권장)"}")
-            appendLine("알림: ${if (notif) "허용" else "필요"}")
-            appendLine("음성: ${speaker?.statusText}")
-            appendLine("상태: ${HikeService.status}")
-            appendLine()
-            appendLine("※ 삼성: 설정 > 배터리 > 백그라운드 사용 제한에서 이 앱을 '제한 없음'으로 두세요.")
+    private fun showSettings() {
+        val pad = (16 * resources.displayMetrics.density).toInt()
+        val url = EditText(this).apply { hint = "https://….ts.net:8443"; setText(Api.baseUrl(this@MainActivity)) }
+        val tok = EditText(this).apply { hint = "토큰"; setText(Api.token(this@MainActivity)) }
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, 0); addView(url); addView(tok) }
+        AlertDialog.Builder(this).setTitle("서버 설정").setView(box)
+            .setPositiveButton("저장") { _, _ -> Api.save(this, url.text.toString(), tok.text.toString()); load() }
+            .setNegativeButton("취소", null).show()
+    }
+
+    /** 웹 페이지에서 호출되는 브리지. 서버 도메인 밖 페이지는 로드되지 않으므로 신뢰 범위는 우리 서버뿐이다. */
+    inner class Bridge {
+        @JavascriptInterface fun startCourse(courseId: String) {
+            thread {
+                try {
+                    val bytes = Api.get(this@MainActivity, "/api/courses/" + java.net.URLEncoder.encode(courseId, "UTF-8") + "/package")
+                    val pkg = CoursePackage.parse(bytes.decodeToString())   // 저장 전에 형식 검증
+                    val tmp = File(filesDir, HikeService.PACKAGE_FILE + ".tmp")
+                    tmp.writeBytes(bytes)
+                    tmp.renameTo(File(filesDir, HikeService.PACKAGE_FILE))
+                    runOnUiThread {
+                        Toast.makeText(this@MainActivity, "코스 저장 완료: ${pkg.course.name}", Toast.LENGTH_SHORT).show()
+                        startActivity(Intent(this@MainActivity, ControlActivity::class.java))
+                    }
+                } catch (e: Exception) {
+                    runOnUiThread { showMsg("코스를 받지 못했어요: ${e.message}") }
+                }
+            }
         }
-        handler.postDelayed({ refresh() }, 1000)
     }
-
-    override fun onResume() { super.onResume(); refresh() }
-    override fun onPause() { handler.removeCallbacksAndMessages(null); super.onPause() }
-    override fun onDestroy() { speaker?.shutdown(); super.onDestroy() }
 }

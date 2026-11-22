@@ -35,6 +35,8 @@ class HikeService : Service() {
         const val ACTION_SIM = "app.hiking.SIM"
         const val ACTION_PAUSE = "app.hiking.PAUSE"
         const val ACTION_STOP = "app.hiking.STOP"
+        /** 서버에서 받은 코스 패키지(filesDir). 없으면 assets 의 내장 시험 코스를 쓴다. */
+        const val PACKAGE_FILE = "course-package.json"
         private const val CHANNEL = "hike"
         private const val NOTIF_ID = 1
 
@@ -106,12 +108,16 @@ class HikeService : Service() {
             startForeground(NOTIF_ID, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
         } else startForeground(NOTIF_ID, n)
 
-        val pkg = assets.open("suraksan_package.json").use { CoursePackage.parse(it.readBytes().decodeToString()) }
+        val saved = java.io.File(filesDir, PACKAGE_FILE)
+        val pkgText = if (saved.exists()) saved.readText()
+        else assets.open("suraksan_package.json").use { it.readBytes().decodeToString() }
+        val pkg = CoursePackage.parse(pkgText)
         val c = Course(pkg)
         course = c
         engine = GuidanceEngine(c, pkg.mountain.name, pkg.pois)
         speaker = Speaker(this)
-        log = TrackLog(this)
+        log = TrackLog(this, pkg.course.id, sim)
+        if (!sim) startStepCounter()
         running = true; simulating = sim; paused = false
         lastMoveRealMs = SystemClock.elapsedRealtime()
         status = if (sim) "시뮬레이션 중" else "GPS 신호 기다리는 중"
@@ -209,11 +215,39 @@ class HikeService : Service() {
         handler.removeCallbacksAndMessages(null)
         if (hasLocationCallback) { fused.removeLocationUpdates(callback); hasLocationCallback = false }
         speaker?.shutdown(); speaker = null
+        stopStepCounter()
+        val wasReal = !simulating
         log?.flush()
         running = false; simulating = false
         status = "종료됨" + (log?.let { " (기록: ${it.path})" } ?: "")
+        // 하산 후 자동 업로드: 네트워크가 있을 때(WorkManager) /health 확인 뒤 올린다. 시뮬레이션은 올리지 않는다.
+        if (wasReal) UploadWorker.enqueue(applicationContext)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
+    }
+
+    // ---- 걸음 수 (명세 §5.8): 걸음 센서는 부팅 후 누적값이라 시작/끝 차이를 쓴다 ----
+    private var stepSensorFirst = -1f
+    private var stepSensorLast = -1f
+    private val stepListener = object : android.hardware.SensorEventListener {
+        override fun onSensorChanged(e: android.hardware.SensorEvent) {
+            if (stepSensorFirst < 0) stepSensorFirst = e.values[0]
+            stepSensorLast = e.values[0]
+        }
+        override fun onAccuracyChanged(s: android.hardware.Sensor?, a: Int) {}
+    }
+
+    private fun startStepCounter() {
+        if (checkSelfPermission(Manifest.permission.ACTIVITY_RECOGNITION) != PackageManager.PERMISSION_GRANTED) return
+        val sm = getSystemService(android.hardware.SensorManager::class.java)
+        sm.getDefaultSensor(android.hardware.Sensor.TYPE_STEP_COUNTER)?.let {
+            sm.registerListener(stepListener, it, android.hardware.SensorManager.SENSOR_DELAY_NORMAL)
+        }
+    }
+
+    private fun stopStepCounter() {
+        getSystemService(android.hardware.SensorManager::class.java).unregisterListener(stepListener)
+        if (stepSensorFirst >= 0) log?.steps((stepSensorLast - stepSensorFirst).toLong())
     }
 
     override fun onDestroy() {
