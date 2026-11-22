@@ -38,8 +38,8 @@
   // 안드로이드 앱 WebView 에서만 JS 브리지가 있다
   if (window.HikeApp) {
     const b = document.getElementById('go'); b.disabled = false;
-    document.getElementById('goNote').textContent = '';
-    b.onclick = () => window.HikeApp.startCourse({{ c.id|tojson }});
+    b.onclick = () => window.HikeApp.startCourse({{ c.id|tojson }}, {{ weather.date|tojson }});   // 화면에서 고른 날짜의 일몰·예보로 받는다
+    document.getElementById('goNote').textContent = {{ ('위 날짜(' ~ weather.date ~ ')의 일몰과 예보로 코스를 받아요.')|tojson }};
   }
 </script>
 {% endblock %}

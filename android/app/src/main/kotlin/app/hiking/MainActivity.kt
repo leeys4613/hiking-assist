@@ -102,10 +102,14 @@ class MainActivity : Activity() {
 
     /** 웹 페이지에서 호출되는 브리지. 서버 도메인 밖 페이지는 로드되지 않으므로 신뢰 범위는 우리 서버뿐이다. */
     inner class Bridge {
-        @JavascriptInterface fun startCourse(courseId: String) {
+        @JavascriptInterface fun startCourse(courseId: String) = startCourse(courseId, "")
+
+        /** [date] 가 YYYY-MM-DD 면 그 날짜의 일몰·강수 예보로 패키지를 받는다(하루 전에 미리 받는 경우). 비어 있으면 오늘. */
+        @JavascriptInterface fun startCourse(courseId: String, date: String) {
             thread {
                 try {
-                    val bytes = Api.get(this@MainActivity, "/api/courses/" + java.net.URLEncoder.encode(courseId, "UTF-8") + "/package")
+                    val q = if (Regex("\\d{4}-\\d{2}-\\d{2}").matches(date)) "?date=$date" else ""
+                    val bytes = Api.get(this@MainActivity, "/api/courses/" + java.net.URLEncoder.encode(courseId, "UTF-8") + "/package" + q)
                     val pkg = CoursePackage.parse(bytes.decodeToString())   // 저장 전에 형식 검증
                     val tmp = File(filesDir, HikeService.PACKAGE_FILE + ".tmp")
                     tmp.writeBytes(bytes)
