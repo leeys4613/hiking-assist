@@ -6,7 +6,7 @@ import javax.xml.parsers.DocumentBuilderFactory
 
 /**
  * GPX 재생 시뮬레이터(명세 §9): GPX 를 시간순으로 guidance-core 에 넣고 안내 이벤트 목록을 만든다.
- * CLI:  ./gradlew :guidance-core:replay --args="<package.json> <track.gpx> [sunset-ISO]"
+ * CLI:  ./gradlew :guidance-core:replay --args="<package.json> <track.gpx> [graph.json] [sunset-ISO]"
  */
 object Replay {
     data class Event(val tS: Double, val key: String, val text: String) {
@@ -38,7 +38,11 @@ object Replay {
     fun main(args: Array<String>) {
         require(args.size >= 2) { "usage: replay <package.json> <track.gpx> [sunset]" }
         var pkg = CoursePackage.parse(File(args[0]).readText())
-        if (args.size > 2) pkg = pkg.copy(sunset = args[2])
+        for (extra in args.drop(2)) {
+            pkg = if (extra.endsWith(".json")) pkg.copy(graph = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+                .decodeFromString(Graph.serializer(), File(extra).readText()))
+            else pkg.copy(sunset = extra)
+        }
         val fixes = readGpx(File(args[1]))
         println("${fixes.size} fixes, ${(fixes.last().timeMs - fixes.first().timeMs) / 1000}s")
         run(pkg, fixes).forEach { println("%8.1fs  %-14s %s".format(it.tS, it.key, it.text)) }

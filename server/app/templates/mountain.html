@@ -1,5 +1,15 @@
 {% extends "base.html" %}
-{% block title %}{{ m.name }}{% endblock %}
+{% block title %}{{ m.name }}{% if report %}
+<h2>재경로</h2>
+<div class="card">
+  {% if graph.enabled %}<strong>사용</strong> <span class="badge">검증 통과</span>{% else %}<strong>사용 안 함</strong>{% endif %}
+  <div class="mut">연결 요소 {{ report.summary.components }}개 · 간선 {{ report.summary.edges }}개 · 막다른 끝 {{ report.summary.dead_ends }}곳
+    · 끊긴 지점 후보 {{ report.candidates|length }}건</div>
+  {% for why in report.reasons %}<div class="mut">· {{ why }}</div>{% endfor %}
+  <p><a href="/mountains/{{ m.id }}/graph">그래프 검토 지도 보기</a></p>
+</div>
+{% endif %}
+{% endblock %}
 {% block body %}
 <h1>{{ m.name }} 코스</h1>
 {% for c in courses %}
@@ -8,4 +18,14 @@
   <div class="mut">{{ (c.length_m)|km }}km · 누적 상승 {{ c.ascent_m }}m · 예상 {{ c.std_minutes|hm }}{% if c.my_minutes %} / 내 예상 {{ c.my_minutes|hm }}{% endif %}</div>
 </a>
 {% endfor %}
+{% if report %}
+<h2>재경로</h2>
+<div class="card">
+  {% if graph.enabled %}<strong>사용</strong> <span class="badge">검증 통과</span>{% else %}<strong>사용 안 함</strong>{% endif %}
+  <div class="mut">연결 요소 {{ report.summary.components }}개 · 간선 {{ report.summary.edges }}개 · 막다른 끝 {{ report.summary.dead_ends }}곳
+    · 끊긴 지점 후보 {{ report.candidates|length }}건</div>
+  {% for why in report.reasons %}<div class="mut">· {{ why }}</div>{% endfor %}
+  <p><a href="/mountains/{{ m.id }}/graph">그래프 검토 지도 보기</a></p>
+</div>
+{% endif %}
 {% endblock %}

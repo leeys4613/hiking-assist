@@ -1,0 +1,37 @@
+{
+ "name": "real_off_trail",
+ "package": "suraksan_package.json",
+ "gpx": "real_off_trail.gpx",
+ "watch": [
+  "off_course",
+  "back",
+  "alt_route",
+  "off_trail",
+  "no_route",
+  "sunset",
+  "summit",
+  "descent",
+  "end"
+ ],
+ "expect": [
+  {
+   "type": "off_trail",
+   "atS": 74.0,
+   "tolS": 2.5,
+   "textContains": "남동쪽"
+  },
+  {
+   "type": "off_trail",
+   "atS": 104.0,
+   "tolS": 2.5,
+   "textContains": "남동쪽"
+  },
+  {
+   "type": "off_trail",
+   "atS": 134.0,
+   "tolS": 2.5,
+   "textContains": "남동쪽"
+  }
+ ],
+ "graph": "graphs/suraksan.graph.json"
+}

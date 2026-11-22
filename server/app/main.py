@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from . import config, db as dbm, pace_model, stats, sun
 from .pace import CoursePace
 from .auth import require_token, token_ok
-from .models import Course, Hike, Mountain, PaceState
+from .models import Course, GraphState, Hike, Mountain, PaceState
 from .seed import seed
 
 HERE = Path(__file__).resolve().parent
@@ -96,6 +96,9 @@ def create_app(session_factory=None) -> FastAPI:
         """저장된 패키지에 날짜별 일몰과 개인 페이스 모델을 얹어 앱에 내려줄 패키지를 만든다."""
         pkg = json.loads(c.package_json)
         pkg["sunset"] = sun.sunset_iso(c.mountain.lat, c.mountain.lon, day)
+        gs = db.get(GraphState, c.mountain_id)
+        if gs and gs.enabled:       # 검증을 통과한 산에서만 그래프를 내려줘 앱의 재경로를 켠다(AC8)
+            pkg["graph"] = json.loads(gs.graph_json)
         model = current_model(db)
         if model:
             summit = pace_model.typical_summit_s(
@@ -127,7 +130,8 @@ def create_app(session_factory=None) -> FastAPI:
         visits = _visit_counts(db)
         return [
             {"id": m.id, "name": m.name, "lat": m.lat, "lon": m.lon,
-             "visited": visits.get(m.id, 0) > 0, "visits": visits.get(m.id, 0)}
+             "visited": visits.get(m.id, 0) > 0, "visits": visits.get(m.id, 0),
+             "reroute": bool((gs := db.get(GraphState, m.id)) and gs.enabled)}
             for m in db.scalars(select(Mountain).order_by(Mountain.name))
         ]
 
@@ -159,6 +163,13 @@ def create_app(session_factory=None) -> FastAPI:
             raise HTTPException(422, "date must be YYYY-MM-DD")
         # 날씨(강수확률)는 아직 연동하지 않는다 → weather 필드 없음
         return JSONResponse(build_package(db, c, day))
+
+    @app.get("/api/mountains/{mountain_id}/graph-report", dependencies=auth)
+    def api_graph_report(mountain_id: str, db: Session = Depends(get_db)):
+        gs = db.get(GraphState, mountain_id)
+        if gs is None:
+            raise HTTPException(404, "no graph for this mountain")
+        return json.loads(gs.report_json)
 
     @app.get("/api/pace-model", dependencies=auth)
     def api_pace_model(db: Session = Depends(get_db)):
@@ -244,7 +255,23 @@ def create_app(session_factory=None) -> FastAPI:
         m = db.get(Mountain, mountain_id)
         if m is None:
             raise HTTPException(404, "mountain not found")
-        return templates.TemplateResponse(request, "mountain.html", {"m": m, "courses": api_courses(mountain_id, db)})
+        gs = db.get(GraphState, mountain_id)
+        rep = json.loads(gs.report_json) if gs else None
+        return templates.TemplateResponse(request, "mountain.html", {
+            "m": m, "courses": api_courses(mountain_id, db), "graph": gs, "report": rep})
+
+    @app.get("/mountains/{mountain_id}/graph", response_class=HTMLResponse, dependencies=auth)
+    def page_graph(mountain_id: str, request: Request, db: Session = Depends(get_db)):
+        """수동 검토용 지도(명세 §7-3): 연결 요소별 색, 막다른 끝, 끊긴 지점 후보, 코스."""
+        gs = db.get(GraphState, mountain_id)
+        m = db.get(Mountain, mountain_id)
+        if gs is None or m is None:
+            raise HTTPException(404, "no graph for this mountain")
+        course = db.scalars(select(Course).where(Course.mountain_id == mountain_id)).first()
+        data = {"graph": json.loads(gs.graph_json), "report": json.loads(gs.report_json),
+                "course": [[p[0], p[1]] for p in json.loads(course.package_json)["course"]["polyline"]] if course else []}
+        return templates.TemplateResponse(request, "graph.html", {
+            "m": m, "report": data["report"], "data_json": json.dumps(data, ensure_ascii=False).replace("</", "<\\/")})
 
     @app.get("/courses/{course_id}", response_class=HTMLResponse, dependencies=auth)
     def page_course(course_id: str, request: Request, db: Session = Depends(get_db)):

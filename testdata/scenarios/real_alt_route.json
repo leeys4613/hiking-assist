@@ -1,0 +1,25 @@
+{
+ "name": "real_alt_route",
+ "package": "suraksan_package.json",
+ "gpx": "real_alt_route.gpx",
+ "watch": [
+  "off_course",
+  "back",
+  "alt_route",
+  "off_trail",
+  "no_route",
+  "sunset",
+  "summit",
+  "descent",
+  "end"
+ ],
+ "expect": [
+  {
+   "type": "alt_route",
+   "atS": 170.0,
+   "tolS": 3,
+   "textContains": "다른 코스로 들어섰어요"
+  }
+ ],
+ "graph": "graphs/suraksan.graph.json"
+}

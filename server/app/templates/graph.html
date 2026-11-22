@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}{{ m.name }} 그래프 검토{% endblock %}
+{% block body %}
+<link rel="stylesheet" href="/static/leaflet/leaflet.css">
+<h1>{{ m.name }} · 그래프 검토</h1>
+<p class="mut">연결 요소별로 색을 달리했어요. <b>빨간 점선</b>은 폐쇄 구간, <b>주황 점</b>은 막다른 끝(끊김 의심), <b>흰 점선</b>은 끊긴 지점 후보예요(자동으로 합치지 않아요).
+  검증: <b>{% if report.passed %}통과 → 재경로 사용{% else %}실패 → 재경로 사용 안 함{% endif %}</b></p>
+<div id="map" style="height:62vh"></div>
+<h2>연결 요소</h2>
+<table>
+  <tr><th>#</th><th>노드</th><th>간선</th><th>길이</th><th></th></tr>
+  {% for c in report.components %}<tr><td><span class="dot" id="dot{{ c.id }}">●</span> {{ c.id }}</td><td>{{ c.nodes }}</td><td>{{ c.edges }}</td><td>{{ (c.length_m / 1000)|round(1) }}km</td><td>{% if c.has_course %}코스 포함{% endif %}</td></tr>{% endfor %}
+</table>
+<h2>끊긴 지점 후보</h2>
+{% if report.candidates %}
+<table><tr><th>id</th><th>거리</th><th>설명</th></tr>
+{% for c in report.candidates %}<tr><td>{{ c.id }}</td><td>{{ c.length_m }}m</td><td>{{ c.note }}</td></tr>{% endfor %}</table>
+<p class="mut">승인: <code>server/.venv/bin/python -I server/tools/graph.py approve {{ m.id }} &lt;id&gt;</code> 후 build 를 다시 실행하세요.</p>
+{% else %}<p class="mut">후보가 없어요.</p>{% endif %}
+{% if not report.osm_checked %}<p class="mut">OSM 보완 후보는 아직 확인하지 않았어요{% if report.osm_error %} ({{ report.osm_error }}){% endif %}.</p>{% endif %}
+<script src="/static/leaflet/leaflet.js"></script>
+<script id="data" type="application/json">{{ data_json|safe }}</script>
+<script>
+  const D = JSON.parse(document.getElementById('data').textContent);
+  const map = L.map('map');
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, maxNativeZoom:18, attribution:'Tiles &copy; Esri'}).addTo(map);
+  const palette = ['#42a5f5', '#ef5350', '#ffee58', '#ab47bc', '#26c6da', '#8d6e63'];
+  // 노드가 속한 연결 요소를 간선으로 계산
+  const parent = {}; const find = x => parent[x] === x ? x : (parent[x] = find(parent[x]));
+  D.graph.nodes.forEach(n => parent[n.id] = n.id);
+  D.graph.edges.filter(e => !e.closed).forEach(e => parent[find(e.from)] = find(e.to));
+  const roots = [...new Set(D.graph.nodes.map(n => find(n.id)))];
+  const size = r => D.graph.nodes.filter(n => find(n.id) === r).length;
+  roots.sort((a, b) => size(b) - size(a));           // 큰 요소가 0번 (리포트와 같은 순서)
+  const color = n => palette[roots.indexOf(find(n)) % palette.length];
+  roots.forEach((r, i) => { const d = document.getElementById('dot' + i); if (d) d.style.color = palette[i % palette.length]; });
+  const all = L.featureGroup().addTo(map);
+  D.graph.edges.forEach(e => L.polyline(e.geometry.map(p => [p[0], p[1]]), e.closed
+      ? {color: '#ff1744', weight: 4, dashArray: '6 6'} : {color: color(e.from), weight: 3, opacity: .9}).addTo(all));
+  const deg = {}; D.graph.edges.forEach(e => { deg[e.from] = (deg[e.from] || 0) + 1; deg[e.to] = (deg[e.to] || 0) + 1; });
+  D.graph.nodes.forEach(n => { if (deg[n.id] === 1) L.circleMarker([n.lat, n.lon], {radius: 4, color: '#ff9800', fillOpacity: 1}).bindTooltip('막다른 끝').addTo(map); });
+  D.report.candidates.forEach(c => L.polyline(c.coords, {color: '#fff', weight: 4, dashArray: '3 8'}).bindTooltip(c.id + ' ' + c.length_m + 'm').addTo(map));
+  L.polyline(D.course, {color: '#ffeb3b', weight: 7, opacity: .45}).bindTooltip('코스').addTo(map);
+  map.fitBounds(all.getBounds().pad(0.05));
+</script>
+{% endblock %}

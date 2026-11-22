@@ -28,6 +28,10 @@ class ScenarioTest {
         val pkgFile = File(dir, pkgName).takeIf { it.exists() } ?: File(testdata, pkgName)
         var pkg = CoursePackage.parse(pkgFile.readText())
         meta["sunset"]?.jsonPrimitive?.contentOrNull?.let { pkg = pkg.copy(sunset = it) }
+        // 패키지와 별도 파일로 둔 그래프(실제 수락산 그래프)를 붙인다
+        meta["graph"]?.jsonPrimitive?.contentOrNull?.let { rel ->
+            pkg = pkg.copy(graph = Json { ignoreUnknownKeys = true }.decodeFromString(Graph.serializer(), File(testdata, rel).readText()))
+        }
         val fixes = Replay.readGpx(File(dir, meta["gpx"]!!.jsonPrimitive.content))
         val watch = (meta["watch"] as JsonArray).map { it.jsonPrimitive.content }.toSet()
         val actual = Replay.run(pkg, fixes).filter { it.type in watch }
@@ -53,9 +57,11 @@ class ScenarioTest {
     @Test fun `5 등산로 밖 - 30초마다 방향 안내 그리고 복귀`() = check("off_trail")
     @Test fun `6 폐쇄 구간 - 폐쇄 길로 안내하지 않고 열린 등산로 방향을 안내`() = check("closed_edge")
     @Test fun `7 일몰 임박 - 하산 권고 1회`() = check("sunset_late")
+    @Test fun `8 실제 수락산 그래프 - 갈림길에서 코스 밖 샛길로 들어서면 대안 경로 1회`() = check("real_alt_route")
+    @Test fun `9 실제 수락산 그래프 - 등산로에서 멀어지면 맞는 방위로 방향 안내`() = check("real_off_trail")
 
     @Test fun `시나리오 파일은 모두 테스트가 있다`() {
         val names = dir.listFiles { f -> f.name.endsWith(".json") && !f.name.endsWith("_package.json") }!!.map { it.nameWithoutExtension }.toSet()
-        assertEquals(setOf("clean_full", "gps_jump", "real_departure", "alt_route", "off_trail", "closed_edge", "sunset_late"), names)
+        assertEquals(setOf("clean_full", "gps_jump", "real_departure", "alt_route", "off_trail", "closed_edge", "sunset_late", "real_alt_route", "real_off_trail"), names)
     }
 }

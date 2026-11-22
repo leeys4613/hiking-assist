@@ -332,7 +332,121 @@ def synthetic_scenarios():
     save("closed_edge", "synthetic_closed_package.json", f, start, s, expect)
 
 
+# ------------------------------------------------------------------ 실제 수락산 그래프 시나리오 (Phase 5)
+COMPASS = ["북", "북동", "동", "남동", "남", "남서", "서", "북서"]
+
+
+def compass(deg):
+    return COMPASS[int(((deg + 22.5) % 360) / 45)]
+
+
+def boundary_margin(deg):
+    """8방위 경계(22.5°+45°k)까지의 각도 여유. 작으면 노이즈로 방향 단어가 바뀔 수 있다"""
+    r = (deg + 22.5) % 45
+    return min(r, 45 - r)
+
+
+def real_graph_scenarios():
+    from shapely.ops import nearest_points, unary_union
+    frame = RealFrame()
+    pkg = json.loads((REPO / "testdata" / "suraksan_package.json").read_text())
+    G = json.loads((REPO / "testdata" / "graphs" / "suraksan.graph.json").read_text())
+    poly = pkg["course"]["polyline"]
+    course = Path([frame.xy(p[0], p[1]) for p in poly])
+    summit_d = course.cum[pkg["course"]["summit_index"]]
+    nodes = {n["id"]: frame.xy(n["lat"], n["lon"]) for n in G["nodes"]}
+    edges = [e for e in G["edges"] if not e["closed"]]
+    egeo = {e["id"]: LineString([frame.xy(p[0], p[1]) for p in e["geometry"]]) for e in edges}
+    net = unary_union(list(egeo.values()))
+    start = datetime(2026, 11, 21, 9, 0, tzinfo=KST)
+    dt = 1
+    deg = {}
+    for e in edges:
+        deg[e["from"]] = deg.get(e["from"], 0) + 1; deg[e["to"]] = deg.get(e["to"], 0) + 1
+
+    # ---- 8) 실제 갈림길에서 코스 밖 샛길로 → 대안 경로 안내 1회
+    chosen = None
+    for nid, (nx_, ny_) in nodes.items():
+        if deg.get(nid, 0) < 3:
+            continue
+        d_n = course.line.project(Point(nx_, ny_))
+        if course.line.distance(Point(nx_, ny_)) > 8 or not 700 < d_n < summit_d - 700:
+            continue
+        for e in edges:
+            if nid not in (e["from"], e["to"]):
+                continue
+            g = egeo[e["id"]]
+            if e["to"] == nid:
+                g = LineString(list(g.coords)[::-1])
+            if g.length < 200:
+                continue
+            seg = [g.interpolate(k) for k in range(0, 161, 10)]
+            if all(course.line.distance(q) > 36 for q in seg[5:]):           # 50m 이후로는 코스에서 36m 넘게 떨어진 샛길
+                chosen = (nid, d_n, [(q.x, q.y) for q in seg]); break
+        if chosen:
+            break
+    assert chosen, "실제 그래프에서 알맞은 갈림길을 찾지 못함"
+    nid, d_n, branch = chosen
+    raw, t = [], 0.0
+    pre = [course.at(d) for d in range(int(d_n) - 150, int(d_n) + 1, 10)]
+    raw.append({"t": 0.0, "x": pre[0][0], "y": pre[0][1]})
+    t = seg_walk(raw, t, pre + branch[1:], SPEED, dt)
+    s = finalize(resample(raw, dt), frame, 8)
+    dists = [course.line.distance(Point(x["x"], x["y"])) for x in s]
+    ev, _ = detector([x["t"] for x in s], dists)
+    t_off = ev[0][0]
+    s = [x for x in s if x["t"] <= t_off + 12]                                # 대안 경로로 갈아탄 직후까지만
+    save("real_alt_route", "suraksan_package.json", frame, start, s, [
+        {"type": "alt_route", "atS": t_off, "tolS": 3, "textContains": "다른 코스로 들어섰어요"},
+    ], {"graph": "graphs/suraksan.graph.json"})
+    print(f"    (갈림길 노드 {nid}, 코스 {d_n:.0f}m 지점)")
+
+    # ---- 9) 등산로 밖(어떤 등산로에서도 멀리) → 맞는 방위의 방향 안내
+    def try_off_trail(d0, side, lateral):
+        raw, t = [], 0.0
+        x0, y0 = course.at(d0); raw.append({"t": 0.0, "x": x0, "y": y0})
+        for i in range(1, 140):
+            x, y = course.at(d0 + SPEED * min(i, 30)); nx, ny = course.normal(d0 + SPEED * min(i, 30))
+            o = lateral * min(max(i - 30, 0) / 60.0, 1.0)                    # 30초 걷다가 60초 동안 옆으로 벌어져 머문다
+            raw.append({"t": float(i), "x": x + side * o * nx, "y": y + side * o * ny, "acc": 8.0})
+        smp = finalize(raw, frame, 9)
+        ds = [course.line.distance(Point(q["x"], q["y"])) for q in smp]
+        ev, states = detector([q["t"] for q in smp], ds)
+        if len(ev) != 1:
+            return None
+        t_off = ev[0][0]
+        expect, nxt = [], t_off
+        for q, d, st in zip(smp, ds, states):
+            if q["t"] >= nxt and st == "OFF" and d > 30:
+                p = Point(q["x"], q["y"])
+                nd = net.distance(p)
+                if nd < 30:                                                   # 다른 등산로 가까이 → 이 후보는 버린다
+                    return None
+                a, b = nearest_points(p, net)
+                brg = math.degrees(math.atan2(b.x - a.x, b.y - a.y)) % 360
+                if boundary_margin(brg) < 7:
+                    return None
+                expect.append({"type": "off_trail", "atS": q["t"], "tolS": 2.5, "textContains": compass(brg) + "쪽"}); nxt = q["t"] + 30
+        return (smp, expect) if len(expect) >= 2 else None
+
+    found = None
+    for d0 in range(800, int(summit_d) - 800, 50):
+        for side in (1, -1):
+            for lateral in (90.0, 70.0):
+                found = try_off_trail(d0, side, lateral)
+                if found:
+                    break
+            if found:
+                break
+        if found:
+            break
+    assert found, "등산로에서 충분히 먼 지점을 찾지 못함"
+    smp, expect = found
+    save("real_off_trail", "suraksan_package.json", frame, start, smp, expect, {"graph": "graphs/suraksan.graph.json"})
+
+
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
     real_scenarios()
     synthetic_scenarios()
+    real_graph_scenarios()

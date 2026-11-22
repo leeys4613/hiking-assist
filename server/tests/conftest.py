@@ -16,6 +16,7 @@ def client(monkeypatch):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
     with TestClient(create_app(factory)) as c:   # with → startup(seed) 실행
+        c.factory = factory
         yield c
 
 

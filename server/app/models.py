@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -56,3 +56,13 @@ class PaceState(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     model_json: Mapped[str] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class GraphState(Base):
+    """산별 등산로 그래프와 검증 리포트(명세 §7). enabled 는 검증 통과 여부이며,
+    통과한 산에서만 패키지에 graph 를 실어 앱의 재경로를 켠다(AC8)."""
+    __tablename__ = "graph_state"
+    mountain_id: Mapped[str] = mapped_column(ForeignKey("mountain.id"), primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    report_json: Mapped[str] = mapped_column(Text)
+    graph_json: Mapped[str] = mapped_column(Text)
