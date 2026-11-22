@@ -28,7 +28,7 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params)
         val done = sp.getStringSet("done", emptySet())!!.toMutableSet()
         val pending = dir.listFiles { f -> f.name.startsWith("hike-") && f.name.endsWith(".log") && f.name !in done }
             ?.sortedBy { it.name } ?: emptyList()
-        if (pending.isEmpty()) return Result.success()
+        if (pending.isEmpty()) { BatterySaver.restoreNow(ctx); return Result.success() }
         if (!Api.configured(ctx)) { setStatus(ctx, "서버 주소/토큰이 설정되지 않았어요"); return Result.failure() }
 
         try { Api.get(ctx, "/health") } catch (e: Api.HttpError) {
@@ -59,6 +59,7 @@ class UploadWorker(ctx: Context, params: WorkerParameters) : Worker(ctx, params)
             }
         }
         sp.edit().putStringSet("done", done).apply()
+        BatterySaver.restoreNow(ctx)   // 올릴 기록이 모두 끝났으니 절전 모드를 원래대로
         return Result.success()
     }
 

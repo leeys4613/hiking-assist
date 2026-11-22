@@ -35,7 +35,7 @@ class ControlActivity : Activity() {
             root.addView(Button(this).apply { text = label; setOnClickListener { onClick() } })
         }
         button("1) 권한 허용 (위치 → 알림 → 항상 허용 순서)") { requestNextPermission() }
-        button("2) 배터리 '제한 없음' 설정 열기") { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+        button("2) 배터리 '제한 없음' 허용") { requestUnrestrictedBattery() }
         button("음성 테스트 (음악 켜고 눌러 보세요)") {
             speaker?.speak("정상까지 2.3킬로, 약 55분 남았어요. 현재 페이스 킬로당 22분이에요.") { }
         }
@@ -80,13 +80,25 @@ class ControlActivity : Activity() {
             appendLine("항상 허용(백그라운드 위치): ${if (bg) "허용" else "미허용 (화면 끈 산행에 권장)"}")
             appendLine("알림: ${if (notif) "허용" else "필요"}")
             appendLine("음성: ${speaker?.statusText}")
+            appendLine(BatterySaver.statusText(this@ControlActivity))
+            appendLine("배터리 사용량 제한: ${if (isUnrestricted()) "제한 없음" else "제한됨 — 아래 2) 버튼으로 허용하세요"}")
             appendLine("코스: ${courseName()}")
             appendLine("상태: ${HikeService.status}")
             appendLine("업로드: ${UploadWorker.lastStatus(this@ControlActivity)}")
             appendLine()
-            appendLine("※ 삼성: 설정 > 배터리 > 백그라운드 사용 제한에서 이 앱을 '제한 없음'으로 두세요.")
+            appendLine("※ 삼성은 설정 > 배터리 > 백그라운드 사용 제한의 '절전 앱/잠자는 앱' 목록에도 이 앱이 없어야 해요.")
         }
         handler.postDelayed({ refresh() }, 1000)
+    }
+
+    private fun isUnrestricted() =
+        getSystemService(android.os.PowerManager::class.java).isIgnoringBatteryOptimizations(packageName)
+
+    /** 시스템 확인창(허용/거부)을 띄운다. 이미 허용돼 있으면 설정 목록으로 보낸다. */
+    private fun requestUnrestrictedBattery() {
+        val i = if (isUnrestricted()) Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        else Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, android.net.Uri.parse("package:$packageName"))
+        startActivity(i)
     }
 
     private fun courseName(): String {

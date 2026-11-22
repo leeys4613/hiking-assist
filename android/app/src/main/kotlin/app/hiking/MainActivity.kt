@@ -63,10 +63,18 @@ class MainActivity : Activity() {
         })
         if (Api.configured(this)) load() else showSettings()
 
-        // 디버그 빌드 전용: `adb shell am start -n app.hiking/.MainActivity --ez sim true` 로 시뮬레이션 자동 시작
+        handleDebugIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) { super.onNewIntent(intent); handleDebugIntent(intent) }
+
+    /** 디버그 빌드 전용 신호: `adb shell am start -n app.hiking/.MainActivity --ez sim|upload|stop true` */
+    private fun handleDebugIntent(intent: Intent?) {
         val debuggable = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
-        if (debuggable && intent?.getBooleanExtra("upload", false) == true) UploadWorker.enqueue(this)
-        if (debuggable && intent?.getBooleanExtra("sim", false) == true) {
+        if (!debuggable || intent == null) return
+        if (intent.getBooleanExtra("upload", false)) UploadWorker.enqueue(this)
+        if (intent.getBooleanExtra("stop", false)) startService(Intent(this, HikeService::class.java).setAction(HikeService.ACTION_STOP))
+        if (intent.getBooleanExtra("sim", false)) {
             startForegroundService(Intent(this, HikeService::class.java).setAction(HikeService.ACTION_SIM))
         }
     }

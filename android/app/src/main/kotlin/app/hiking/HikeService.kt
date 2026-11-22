@@ -80,7 +80,7 @@ class HikeService : Service() {
 
     private val ticker = object : Runnable {
         override fun run() {
-            pump(); updateNotification(); log?.flush()
+            pump(); updateNotification(); log?.flush(); BatterySaver.keepOff(this@HikeService)
             handler.postDelayed(this, 2_000)
         }
     }
@@ -118,6 +118,7 @@ class HikeService : Service() {
         speaker = Speaker(this)
         log = TrackLog(this, pkg.course.id, sim)
         if (!sim) startStepCounter()
+        BatterySaver.suspendForHike(this)
         running = true; simulating = sim; paused = false
         lastMoveRealMs = SystemClock.elapsedRealtime()
         status = if (sim) "시뮬레이션 중" else "GPS 신호 기다리는 중"
@@ -221,7 +222,10 @@ class HikeService : Service() {
         running = false; simulating = false
         status = "종료됨" + (log?.let { " (기록: ${it.path})" } ?: "")
         // 하산 후 자동 업로드: 네트워크가 있을 때(WorkManager) /health 확인 뒤 올린다. 시뮬레이션은 올리지 않는다.
-        if (wasReal) UploadWorker.enqueue(applicationContext)
+        if (wasReal) {
+            UploadWorker.enqueue(applicationContext)           // 업로드가 끝나면 워커가 절전 모드를 복원한다
+            BatterySaver.scheduleRestore(applicationContext)   // 업로드가 안 끝나도 20분 뒤에는 복원
+        } else BatterySaver.restoreNow(applicationContext)
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
