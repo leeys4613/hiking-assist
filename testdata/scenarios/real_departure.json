@@ -1,0 +1,30 @@
+{
+ "name": "real_departure",
+ "package": "suraksan_package.json",
+ "gpx": "real_departure.gpx",
+ "watch": [
+  "off_course",
+  "back",
+  "alt_route",
+  "off_trail",
+  "no_route",
+  "sunset",
+  "summit",
+  "descent",
+  "end"
+ ],
+ "expect": [
+  {
+   "type": "off_course",
+   "atS": 62.0,
+   "tolS": 2.5,
+   "textContains": "코스를 벗어났어요"
+  },
+  {
+   "type": "back",
+   "atS": 91.0,
+   "tolS": 2.5,
+   "textContains": "돌아왔어요"
+  }
+ ]
+}

@@ -1,0 +1,17 @@
+{
+ "name": "gps_jump",
+ "package": "suraksan_package.json",
+ "gpx": "gps_jump.gpx",
+ "watch": [
+  "off_course",
+  "back",
+  "alt_route",
+  "off_trail",
+  "no_route",
+  "sunset",
+  "summit",
+  "descent",
+  "end"
+ ],
+ "expect": []
+}

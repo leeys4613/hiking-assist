@@ -1,0 +1,54 @@
+{
+ "name": "off_trail",
+ "package": "synthetic_package.json",
+ "gpx": "off_trail.gpx",
+ "watch": [
+  "off_course",
+  "back",
+  "alt_route",
+  "off_trail",
+  "no_route",
+  "sunset",
+  "summit",
+  "descent",
+  "end"
+ ],
+ "expect": [
+  {
+   "type": "off_trail",
+   "atS": 874.0,
+   "tolS": 2.5,
+   "textContains": "동쪽"
+  },
+  {
+   "type": "off_trail",
+   "atS": 904.0,
+   "tolS": 2.5,
+   "textContains": "동쪽"
+  },
+  {
+   "type": "off_trail",
+   "atS": 934.0,
+   "tolS": 2.5,
+   "textContains": "동쪽"
+  },
+  {
+   "type": "off_trail",
+   "atS": 964.0,
+   "tolS": 2.5,
+   "textContains": "동쪽"
+  },
+  {
+   "type": "off_trail",
+   "atS": 994.0,
+   "tolS": 2.5,
+   "textContains": "동쪽"
+  },
+  {
+   "type": "back",
+   "atS": 1043.0,
+   "tolS": 2.5,
+   "textContains": "돌아왔어요"
+  }
+ ]
+}

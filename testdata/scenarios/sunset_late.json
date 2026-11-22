@@ -1,0 +1,25 @@
+{
+ "name": "sunset_late",
+ "package": "suraksan_package.json",
+ "gpx": "sunset_late.gpx",
+ "watch": [
+  "off_course",
+  "back",
+  "alt_route",
+  "off_trail",
+  "no_route",
+  "sunset",
+  "summit",
+  "descent",
+  "end"
+ ],
+ "expect": [
+  {
+   "type": "sunset",
+   "atS": 0.0,
+   "tolS": 3,
+   "textContains": "하산을 권해요"
+  }
+ ],
+ "sunset": "2026-11-21T17:16+09:00"
+}

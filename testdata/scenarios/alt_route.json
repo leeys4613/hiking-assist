@@ -1,0 +1,39 @@
+{
+ "name": "alt_route",
+ "package": "synthetic_package.json",
+ "gpx": "alt_route.gpx",
+ "watch": [
+  "off_course",
+  "back",
+  "alt_route",
+  "off_trail",
+  "no_route",
+  "sunset",
+  "summit",
+  "descent",
+  "end"
+ ],
+ "expect": [
+  {
+   "type": "alt_route",
+   "atS": 878.0,
+   "tolS": 3,
+   "textContains": "다른 코스로 들어섰어요"
+  },
+  {
+   "type": "summit",
+   "atS": 1642.0,
+   "tolS": 8
+  },
+  {
+   "type": "descent",
+   "atS": 1751.666666666641,
+   "tolS": 12
+  },
+  {
+   "type": "end",
+   "atS": 3868.3333333334303,
+   "tolS": 12
+  }
+ ]
+}

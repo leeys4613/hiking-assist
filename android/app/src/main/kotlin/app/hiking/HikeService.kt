@@ -114,7 +114,7 @@ class HikeService : Service() {
         val pkg = CoursePackage.parse(pkgText)
         val c = Course(pkg)
         course = c
-        engine = GuidanceEngine(c, pkg.mountain.name, pkg.pois)
+        engine = GuidanceEngine(pkg)   // 패키지의 그래프(재경로)와 일몰(하산 권고)도 함께 사용
         speaker = Speaker(this)
         log = TrackLog(this, pkg.course.id, sim)
         if (!sim) startStepCounter()
@@ -164,7 +164,10 @@ class HikeService : Service() {
         log?.track(fix.timeMs, fix.lat, fix.lon, fix.accuracyM, e.progress)
         made.forEach { log?.event(fix.timeMs, it.key, it.text) }
         val p = e.progress
-        if (p != null) status = (if (simulating) "시뮬레이션 " else "") + "진행 ${Fmt.distance(p)} / ${Fmt.distance(course!!.length)}"
+        if (p != null) {
+            val off = if (e.departureState == app.hiking.guidance.DepartureState.OFF_COURSE) " · 코스 이탈 중" else ""
+            status = (if (simulating) "시뮬레이션 " else "") + "진행 ${Fmt.distance(p)} / ${Fmt.distance(e.course.length)}$off"
+        }
         if (!simulating) adaptInterval(p)
         pump()
     }
@@ -290,7 +293,7 @@ class HikeService : Service() {
     }
 
     private fun updateNotification() {
-        val c = course ?: return
+        val c = engine?.course ?: return   // 대안 경로로 갈아탔다면 그 경로 기준
         val p = engine?.progress
         val text = when {
             paused -> "일시정지"

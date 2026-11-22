@@ -2,7 +2,6 @@ package app.hiking.guidance
 
 import kotlin.math.abs
 import kotlin.math.cos
-import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
 
@@ -16,6 +15,7 @@ class Course(pkg: CoursePackage) {
     /** i번째 점까지의 누적 거리(m) */
     val cum: DoubleArray
     val length: Double
+    val summitIndex: Int
     val summitDist: Double
     val endDist: Double
     val summitLat: Double
@@ -36,6 +36,7 @@ class Course(pkg: CoursePackage) {
         for (i in 1 until pl.size) cum[i] = cum[i - 1] + Geo.distance(lat[i - 1], lon[i - 1], lat[i], lon[i])
         length = cum.last()
         val si = pkg.course.summitIndex.coerceIn(0, pl.size - 1)
+        summitIndex = si
         val ei = pkg.course.endIndex.coerceIn(0, pl.size - 1)
         summitDist = cum[si]; summitLat = lat[si]; summitLon = lon[si]
         endDist = cum[ei]; endLat = lat[ei]; endLon = lon[ei]
@@ -46,11 +47,9 @@ class Course(pkg: CoursePackage) {
             val mid = (cum[i] + cum[i - 1]) / 2
             // DEM 노이즈를 피하려고 구간 중앙 ±25m 의 평균 경사를 쓴다
             val g = (eleAt(mid + 25) - eleAt(mid - 25)) / (min(mid + 25, length) - max(mid - 25, 0.0)).coerceAtLeast(1.0)
-            timeCum[i] = timeCum[i - 1] + segLen / toblerMps(g)
+            timeCum[i] = timeCum[i - 1] + segLen / Tobler.mps(g)
         }
     }
-
-    private fun toblerMps(grade: Double): Double = 6.0 * exp(-3.5 * abs(grade + 0.05)) / 3.6
 
     private fun interp(arr: DoubleArray, dist: Double): Double {
         val d = dist.coerceIn(0.0, length)
@@ -124,5 +123,14 @@ class Course(pkg: CoursePackage) {
             i++
         }
         return if (bestOff == Double.MAX_VALUE) null else Projection(bestDist, bestOff)
+    }
+
+    companion object {
+        /** [lat, lon, ele] 점들의 길이(m) */
+        fun lengthOf(pts: List<List<Double>>): Double {
+            var d = 0.0
+            for (i in 1 until pts.size) d += Geo.distance(pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1])
+            return d
+        }
     }
 }
