@@ -1,0 +1,75 @@
+{
+ "model": {
+  "type": "tobler_personal",
+  "factor": 1.12,
+  "grade_bins": {
+   "edges": [
+    -0.3,
+    -0.15,
+    -0.05,
+    0.05,
+    0.15,
+    0.3
+   ],
+   "factors": [
+    1.5,
+    1.35,
+    1.2,
+    1.0,
+    1.15,
+    1.35,
+    1.6
+   ]
+  }
+ },
+ "cases": [
+  {
+   "from": 0,
+   "to": 4365.0,
+   "default_s": 5516.549,
+   "personal_s": 7138.197
+  },
+  {
+   "from": 4365.0,
+   "to": 8730.001,
+   "default_s": 4206.414,
+   "personal_s": 5382.067
+  },
+  {
+   "from": 0,
+   "to": 8730.001,
+   "default_s": 9722.964,
+   "personal_s": 12520.264
+  },
+  {
+   "from": 1000,
+   "to": 3000,
+   "default_s": 2544.419,
+   "personal_s": 3248.459
+  },
+  {
+   "from": 3500,
+   "to": 4300,
+   "default_s": 1100.489,
+   "personal_s": 1493.937
+  },
+  {
+   "from": 5000,
+   "to": 8000,
+   "default_s": 2938.758,
+   "personal_s": 3794.509
+  },
+  {
+   "from": 6000,
+   "to": 6100,
+   "default_s": 66.881,
+   "personal_s": 78.975
+  },
+  {
+   "from": 4400,
+   "to": 8700,
+   "default_s": 4164.002,
+   "personal_s": 5339.655
+  }
+ ]
+}

@@ -20,6 +20,8 @@ data class GuidanceSettings(
     val departure: DepartureSettings = DepartureSettings(),
     /** 등산로 밖에 있을 때 방향 안내를 되풀이하는 간격(명세 §5.4: 30초) */
     val offTrailRepeatS: Long = 30,
+    /** 정기 안내에 "평소보다 N퍼센트 빨라요"를 덧붙인다(개인 페이스 모델이 있을 때만). 명세에서 선택 항목이라 기본 꺼짐 */
+    val relativePaceEnabled: Boolean = false,
     val sunsetEnabled: Boolean = true,
     /** 예상 하산 완료가 일몰 − 이 시간보다 늦으면 하산 권고(명세 §5.2: 30분) */
     val sunsetMarginMin: Long = 30,
@@ -126,7 +128,8 @@ class GuidanceEngine(
             val dSummit = Geo.distance(fix.lat, fix.lon, course.summitLat, course.summitLon)
             if (dSummit <= settings.summitRadiusM && pNow >= course.summitDist - 100) {
                 summitReached = true
-                emit("summit", Priority.EVENT, "정상이에요. ${Fmt.duration((fix.timeMs - startMs!!) / 1000.0)} 걸렸어요.", once = true)
+                val elapsedS = (fix.timeMs - startMs!!) / 1000.0
+                emit("summit", Priority.EVENT, summitText(elapsedS), once = true)
             } else if (pNow >= course.summitDist + settings.summitRadiusM) {
                 summitReached = true // 정상 반경을 못 밟고 지나간 경우: 안내 없이 단계만 넘긴다
             }
@@ -182,10 +185,23 @@ class GuidanceEngine(
                 sb.append(if (descending) "입구까지 " else "정상까지 ")
                 sb.append("${Fmt.distance(remaining)}, 약 ${Fmt.duration(course.etaSeconds(pNow, target))} 남았어요.")
                 currentPaceSecPerKm()?.let { sb.append(" 현재 페이스 ${Fmt.pace(it)}이에요.") }
+                if (settings.relativePaceEnabled) relativePaceText()?.let { sb.append(" $it") }
                 emit("periodic", Priority.PERIODIC, sb.toString(), once = true)
             }
         }
         return out
+    }
+
+    /** "정상이에요. 2시간 10분 걸렸고, 평소보다 5분 빨라요." (평소 기록이 있을 때) */
+    private fun summitText(elapsedS: Double): String {
+        val typical = course.paceModel?.typicalSummitS ?: return "정상이에요. ${Fmt.duration(elapsedS)} 걸렸어요."
+        val diffMin = Math.round((typical - elapsedS) / 60.0 / 5.0).toInt() * 5     // 5분 단위, 양수 = 평소보다 빠름
+        val cmp = when {
+            diffMin >= 5 -> "평소보다 ${diffMin}분 빨라요"
+            diffMin <= -5 -> "평소보다 ${-diffMin}분 느려요"
+            else -> "평소와 비슷해요"
+        }
+        return "정상이에요. ${Fmt.duration(elapsedS)} 걸렸고, $cmp."
     }
 
     /** 이탈이 확정됐을 때(또는 등산로 밖에서 30초마다) 재경로를 계산해 안내한다(§5.4). */
@@ -237,7 +253,7 @@ class GuidanceEngine(
             summitReached = true
         }
         course = Course(CoursePackage(1, Mountain("", mountainName),
-            CourseDef("alt", "대안 경로", poly, summitIdx, poly.size - 1), newPois))
+            CourseDef("alt", "대안 경로", poly, summitIdx, poly.size - 1), newPois, paceModel = old.paceModel))
         pois = newPois
         progress = 0.0
         samples.clear()
@@ -251,6 +267,27 @@ class GuidanceEngine(
         /** ISO-8601(오프셋 포함) → epoch ms. 형식이 틀리면 null(하산 권고만 꺼진다) */
         fun parseSunset(s: String?): Long? =
             s?.let { runCatching { OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() }
+    }
+
+    /** 최근 구간을 개인 모델이 예상한 시간 / 실제 걸린 시간. 1.1 이상이면 평소보다 빠름. 개인 모델이 없으면 null */
+    private fun relativePaceText(): String? {
+        if (course.paceModel == null) return null
+        var expected = 0.0
+        var actual = 0.0
+        val l = samples.toList()
+        for (i in 1 until l.size) {
+            val dt = (l[i].t - l[i - 1].t) / 1000.0
+            val dd = l[i].d - l[i - 1].d
+            if (dt <= 0 || dt > 30 || dd / dt < 0.3) continue
+            expected += course.etaSeconds(l[i - 1].d, l[i].d); actual += dt
+        }
+        if (actual < 120) return null
+        val pct = Math.round((expected / actual - 1.0) * 100.0 / 5.0).toInt() * 5
+        return when {
+            pct >= 10 -> "평소보다 ${pct}퍼센트 빨라요."
+            pct <= -10 -> "평소보다 ${-pct}퍼센트 느려요."
+            else -> null
+        }
     }
 
     private fun recordSample(t: Long, d: Double) {

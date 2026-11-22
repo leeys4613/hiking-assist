@@ -114,7 +114,15 @@ class HikeService : Service() {
         val pkg = CoursePackage.parse(pkgText)
         val c = Course(pkg)
         course = c
-        engine = GuidanceEngine(pkg)   // 패키지의 그래프(재경로)와 일몰(하산 권고)도 함께 사용
+        val sp = getSharedPreferences("settings", MODE_PRIVATE)
+        val settings = app.hiking.guidance.GuidanceSettings(
+            periodicEnabled = sp.getBoolean("periodic", true),
+            poiEnabled = sp.getBoolean("poi", true),
+            sunsetEnabled = sp.getBoolean("sunset", true),
+            relativePaceEnabled = sp.getBoolean("relative_pace", false),
+        )
+        // 패키지의 그래프(재경로), 일몰(하산 권고), 개인 페이스 모델도 함께 사용
+        engine = GuidanceEngine(pkg, settings)
         speaker = Speaker(this)
         log = TrackLog(this, pkg.course.id, sim)
         if (!sim) startStepCounter()

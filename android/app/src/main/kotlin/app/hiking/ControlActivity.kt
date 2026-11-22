@@ -11,6 +11,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.view.Gravity
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -44,6 +45,16 @@ class ControlActivity : Activity() {
         button("일시정지 / 재개") { startService(HikeService.ACTION_PAUSE) }
         button("종료") { startService(HikeService.ACTION_STOP) }
         button("기록 지금 업로드") { UploadWorker.enqueue(this) }
+        root.addView(TextView(this).apply { text = "\n안내 항목 (다음 산행부터 적용)"; textSize = 16f })
+        val sp = getSharedPreferences("settings", MODE_PRIVATE)
+        fun toggle(key: String, label: String, default: Boolean) = root.addView(CheckBox(this).apply {
+            text = label; isChecked = sp.getBoolean(key, default)
+            setOnCheckedChangeListener { _, on -> sp.edit().putBoolean(key, on).apply() }
+        })
+        toggle("periodic", "정기 안내 (1킬로 또는 10분마다)", true)
+        toggle("poi", "쉼터·명소 접근 안내", true)
+        toggle("sunset", "일몰 임박 하산 권고", true)
+        toggle("relative_pace", "평소 대비 페이스 (\"평소보다 10퍼센트 빨라요\")", false)
         setContentView(ScrollView(this).apply { addView(root) })
 
     }

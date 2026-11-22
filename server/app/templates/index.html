@@ -1,9 +1,21 @@
 {% extends "base.html" %}
 {% block body %}
+<link rel="stylesheet" href="/static/leaflet/leaflet.css">
 <h1>산 선택</h1>
+<div id="map" style="height:38vh;min-height:240px"></div>
 {% for m in mountains %}
 <a class="card" href="/mountains/{{ m.id }}">
   <strong>{{ m.name }}</strong>{% if m.visited %}<span class="badge">✓ {{ m.visits }}회</span>{% endif %}
 </a>
 {% else %}<p class="mut">등록된 산이 없어요.</p>{% endfor %}
+<script src="/static/leaflet/leaflet.js"></script>
+<script id="data" type="application/json">{{ data_json|safe }}</script>
+<script>
+  const M = JSON.parse(document.getElementById('data').textContent);
+  const map = L.map('map');
+  L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, maxNativeZoom:18, attribution:'Tiles &copy; Esri'}).addTo(map);
+  const grp = L.featureGroup(M.map(m => L.circleMarker([m.lat, m.lon], {radius:9, color: m.visited ? '#58b57d' : '#ffeb3b', fillOpacity:.9})
+    .bindTooltip(m.name + (m.visited ? ' ✓ ' + m.visits + '회' : '')).on('click', () => location.href = '/mountains/' + m.id))).addTo(map);
+  if (M.length) map.fitBounds(grp.getBounds().pad(0.6), {maxZoom: 13}); else map.setView([37.5, 127], 8);
+</script>
 {% endblock %}

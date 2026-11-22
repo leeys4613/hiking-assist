@@ -14,9 +14,10 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from . import config, db as dbm, stats
+from . import config, db as dbm, pace_model, stats, sun
+from .pace import CoursePace
 from .auth import require_token, token_ok
-from .models import Course, Hike, Mountain
+from .models import Course, Hike, Mountain, PaceState
 from .seed import seed
 
 HERE = Path(__file__).resolve().parent
@@ -68,6 +69,46 @@ def create_app(session_factory=None) -> FastAPI:
             return RedirectResponse("/login", status_code=303)
         return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
+    # ---- 개인 페이스 모델 ----
+    def current_model(db: Session) -> dict | None:
+        row = db.get(PaceState, 1)
+        return json.loads(row.model_json) if row else None
+
+    def retrain(db: Session) -> dict | None:
+        """모든 기록으로 다시 학습해 저장한다(명세 §4.4: 업로드 시 재학습)."""
+        data = []
+        for h in db.scalars(select(Hike)):
+            c = db.get(Course, h.course_id)
+            data.append((json.loads(c.package_json)["course"]["polyline"], json.loads(h.track_json)))
+        model = pace_model.learn(data)
+        row = db.get(PaceState, 1)
+        if model is None:
+            if row:
+                db.delete(row)
+        elif row:
+            row.model_json, row.updated_at = json.dumps(model), datetime.utcnow()
+        else:
+            db.add(PaceState(id=1, model_json=json.dumps(model)))
+        db.commit()
+        return model
+
+    def build_package(db: Session, c: Course, day) -> dict:
+        """저장된 패키지에 날짜별 일몰과 개인 페이스 모델을 얹어 앱에 내려줄 패키지를 만든다."""
+        pkg = json.loads(c.package_json)
+        pkg["sunset"] = sun.sunset_iso(c.mountain.lat, c.mountain.lon, day)
+        model = current_model(db)
+        if model:
+            summit = pace_model.typical_summit_s(
+                [h.summit_s for h in db.scalars(select(Hike).where(Hike.course_id == c.id))])
+            pkg["pace_model"] = {**model, **({"typical_summit_s": summit} if summit else {})}
+        return pkg
+
+    def my_minutes(db: Session, c: Course) -> int | None:
+        model = current_model(db)
+        if not model:
+            return None
+        return round(CoursePace(json.loads(c.package_json)["course"]["polyline"], model).total / 60)
+
     # ---- API ----
     auth = [Depends(require_token)]
 
@@ -102,7 +143,9 @@ def create_app(session_factory=None) -> FastAPI:
         out = []
         for c in db.scalars(select(Course).where(Course.mountain_id == mountain_id)):
             n = db.scalar(select(func.count(Hike.id)).where(Hike.course_id == c.id)) or 0
-            out.append(_course_summary(c, n))
+            summary = _course_summary(c, n)
+            summary["my_minutes"] = my_minutes(db, c)
+            out.append(summary)
         return out
 
     @app.get("/api/courses/{course_id}/package", dependencies=auth)
@@ -110,8 +153,16 @@ def create_app(session_factory=None) -> FastAPI:
         c = db.get(Course, course_id)
         if c is None:
             raise HTTPException(404, "course not found")
-        # date(날씨/일몰)는 Phase 4 에서 weather/sunset 필드를 채운다
-        return Response(content=c.package_json, media_type="application/json")
+        try:
+            day = datetime.strptime(date, "%Y-%m-%d").date() if date else sun.today_kst()
+        except ValueError:
+            raise HTTPException(422, "date must be YYYY-MM-DD")
+        # 날씨(강수확률)는 아직 연동하지 않는다 → weather 필드 없음
+        return JSONResponse(build_package(db, c, day))
+
+    @app.get("/api/pace-model", dependencies=auth)
+    def api_pace_model(db: Session = Depends(get_db)):
+        return current_model(db) or {"type": "tobler", "factor": 1.0}
 
     class HikeIn(BaseModel):
         course_id: str
@@ -148,6 +199,7 @@ def create_app(session_factory=None) -> FastAPI:
         except IntegrityError:
             db.rollback()
             raise HTTPException(409, "duplicate hike")
+        retrain(db)
         response.status_code = 201
         return {**_hike_dict(h), "duplicate": False}
 
@@ -183,7 +235,9 @@ def create_app(session_factory=None) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse, dependencies=auth)
     def page_index(request: Request, db: Session = Depends(get_db)):
-        return templates.TemplateResponse(request, "index.html", {"mountains": api_mountains(db)})
+        ms = api_mountains(db)
+        return templates.TemplateResponse(request, "index.html", {
+            "mountains": ms, "data_json": json.dumps(ms, ensure_ascii=False).replace("</", "<\\/")})
 
     @app.get("/mountains/{mountain_id}", response_class=HTMLResponse, dependencies=auth)
     def page_mountain(mountain_id: str, request: Request, db: Session = Depends(get_db)):
@@ -206,6 +260,7 @@ def create_app(session_factory=None) -> FastAPI:
                 "pois": pkg.get("pois", []), "hikes": overlay}
         return templates.TemplateResponse(request, "course.html", {
             "c": c, "m": c.mountain, "hikes": [_hike_dict(h) for h in hikes],
+            "my_min": my_minutes(db, c), "sunset": sun.sunset_iso(c.mountain.lat, c.mountain.lon, sun.today_kst())[11:16],
             "data_json": json.dumps(data, ensure_ascii=False).replace("</", "<\\/"),
         })
 

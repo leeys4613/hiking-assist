@@ -9,6 +9,7 @@ import kotlin.math.min
 data class Projection(val dist: Double, val offsetM: Double)
 
 class Course(pkg: CoursePackage) {
+    val paceModel: PaceModel? = pkg.paceModel
     val lat: DoubleArray
     val lon: DoubleArray
     val ele: DoubleArray
@@ -47,7 +48,7 @@ class Course(pkg: CoursePackage) {
             val mid = (cum[i] + cum[i - 1]) / 2
             // DEM 노이즈를 피하려고 구간 중앙 ±25m 의 평균 경사를 쓴다
             val g = (eleAt(mid + 25) - eleAt(mid - 25)) / (min(mid + 25, length) - max(mid - 25, 0.0)).coerceAtLeast(1.0)
-            timeCum[i] = timeCum[i - 1] + segLen / Tobler.mps(g)
+            timeCum[i] = timeCum[i - 1] + segLen / Tobler.mps(g) * (paceModel?.factorFor(g) ?: 1.0)
         }
     }
 

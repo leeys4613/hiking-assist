@@ -48,3 +48,11 @@ class Hike(Base):
     events_json: Mapped[str] = mapped_column(Text)             # [{"t":..,"key":..,"text":..}, ...]
     uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     course: Mapped[Course] = relationship(back_populates="hikes")
+
+
+class PaceState(Base):
+    """개인 페이스 모델(전체 기록에서 학습). 업로드 때마다 다시 학습해 한 행(id=1)을 갱신한다."""
+    __tablename__ = "pace_state"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    model_json: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
