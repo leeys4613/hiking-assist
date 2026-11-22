@@ -14,7 +14,7 @@
   const M = JSON.parse(document.getElementById('data').textContent);
   const map = L.map('map');
   L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, maxNativeZoom:18, attribution:'Tiles &copy; Esri'}).addTo(map);
-  const grp = L.featureGroup(M.map(m => L.circleMarker([m.lat, m.lon], {radius:9, color: m.visited ? '#58b57d' : '#ffeb3b', fillOpacity:.9})
+  const grp = L.featureGroup(M.map(m => L.circleMarker([m.lat, m.lon], {radius:9, color: m.visited ? '#8fc7a2' : '#f2a93b', fillOpacity:.9})
     .bindTooltip(m.name + (m.visited ? ' ✓ ' + m.visits + '회' : '')).on('click', () => location.href = '/mountains/' + m.id))).addTo(map);
   if (M.length) map.fitBounds(grp.getBounds().pad(0.6), {maxZoom: 13}); else map.setView([37.5, 127], 8);
 </script>

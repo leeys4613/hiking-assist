@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#0F1713</color>
+    <color name="surface">#16201A</color>
+    <color name="fg">#E8EFE9</color>
+    <color name="muted">#94A39A</color>
+    <color name="line">#25322A</color>
+    <color name="primary">#8FC7A2</color>
+    <color name="on_primary">#0E1A13</color>
+    <color name="primary_soft">#1D2D24</color>
+    <color name="on_primary_soft">#8FC7A2</color>
+    <color name="amber">#F2A93B</color>
+    <color name="ripple">#33FFFFFF</color>
+</resources>

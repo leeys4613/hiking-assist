@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 안드로이드 13+ 테마 아이콘용. 색은 시스템이 입히므로 형태만 단색으로 둔다 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#000000"
+        android:pathData="M30,40 a6,6 0 1,0 12,0 a6,6 0 1,0 -12,0 Z" />
+    <path
+        android:fillColor="#000000"
+        android:fillAlpha="0.6"
+        android:pathData="M46,84 L67,49 L87,84 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M21,84 L41,52 L63,84 Z" />
+    <path
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M41,84 C47,78 36,74 41,68 C45,63 39,60 41,56" />
+</vector>

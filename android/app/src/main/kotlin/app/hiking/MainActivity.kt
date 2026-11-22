@@ -32,15 +32,19 @@ class MainActivity : Activity() {
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val pad = (8 * resources.displayMetrics.density).toInt()
-        val bar = LinearLayout(this).apply { setPadding(pad, pad * 3, pad, 0) }
-        fun btn(label: String, f: () -> Unit) = bar.addView(Button(this).apply {
-            text = label; setOnClickListener { f() }
-        }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-        btn("산행 화면") { startActivity(Intent(this, ControlActivity::class.java)) }
+        val pad = dp(8)
+        val bar = LinearLayout(this).apply { setPadding(pad * 2, pad, pad * 2, pad); gravity = android.view.Gravity.CENTER_VERTICAL }
+        bar.addView(Ui.title(this, "등산 안내").apply { textSize = 20f }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+        fun btn(label: String, f: () -> Unit) = bar.addView(Ui.tonalButton(this, label, 40, f).apply {
+            textSize = 13f; setPadding(dp(12), 0, dp(12), 0)
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { marginStart = dp(6) })
+        btn("산행") { startActivity(Intent(this, ControlActivity::class.java)) }
         btn("새로고침") { load() }
         btn("설정") { showSettings() }
-        msg = TextView(this).apply { setPadding(pad * 2, pad, pad * 2, pad); visibility = android.view.View.GONE }
+        msg = TextView(this).apply {
+            setPadding(pad * 2, pad, pad * 2, pad); visibility = android.view.View.GONE
+            setTextColor(getColor(R.color.fg)); setBackgroundColor(getColor(R.color.primary_soft))
+        }
 
         web = WebView(this).apply {
             settings.javaScriptEnabled = true

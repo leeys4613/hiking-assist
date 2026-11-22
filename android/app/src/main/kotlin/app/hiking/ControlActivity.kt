@@ -27,34 +27,46 @@ class ControlActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         speaker = Speaker(this)
-        val pad = (16 * resources.displayMetrics.density).toInt()
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad * 2, pad, pad) }
-        info = TextView(this).apply { textSize = 15f }
-        root.addView(TextView(this).apply { text = "산행 화면"; textSize = 20f; gravity = Gravity.START })
-        root.addView(info)
-        fun button(label: String, onClick: () -> Unit) {
-            root.addView(Button(this).apply { text = label; setOnClickListener { onClick() } })
-        }
-        button("1) 권한 허용 (위치 → 알림 → 항상 허용 순서)") { requestNextPermission() }
-        button("2) 배터리 '제한 없음' 허용") { requestUnrestrictedBattery() }
-        button("음성 테스트 (음악 켜고 눌러 보세요)") {
+        val pad = dp(16)
+        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad * 2) }
+        root.addView(Ui.title(this, "산행"), Ui.margins(this, bottom = 12))
+        // 상태 카드: 권한·배터리·코스·업로드 상태가 한눈에 보이는 곳
+        info = TextView(this).apply { textSize = 14f; setLineSpacing(0f, 1.2f); setTextColor(getColor(R.color.fg)) }
+        root.addView(Ui.card(this).apply { addView(info) }, Ui.margins(this, bottom = 16))
+
+        fun add(v: android.view.View, bottom: Int = 8) = root.addView(v, Ui.margins(this, bottom = bottom))
+        add(Ui.primaryButton(this, "산행 시작 (실제 GPS)") { startService(HikeService.ACTION_START) })
+        val row = LinearLayout(this)
+        fun half(label: String, last: Boolean, f: () -> Unit) = row.addView(Ui.tonalButton(this, label, onClick = f),
+            LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply { if (!last) marginEnd = dp(8) })
+        half("일시정지 / 재개", false) { startService(HikeService.ACTION_PAUSE) }
+        half("종료", true) { startService(HikeService.ACTION_STOP) }
+        add(row, 24)
+
+        add(Ui.section(this, "준비"), 8)
+        add(Ui.tonalButton(this, "1) 권한 허용 (위치 → 알림 → 항상 허용 순서)") { requestNextPermission() })
+        add(Ui.tonalButton(this, "2) 배터리 '제한 없음' 허용") { requestUnrestrictedBattery() })
+        add(Ui.tonalButton(this, "음성 테스트 (음악 켜고 눌러 보세요)") {
             speaker?.speak("정상까지 2.3킬로, 약 55분 남았어요. 현재 페이스 킬로당 22분이에요.") { }
-        }
-        button("산행 시작 (실제 GPS)") { startService(HikeService.ACTION_START) }
-        button("시뮬레이션 (실내 테스트, 20배속)") { startService(HikeService.ACTION_SIM) }
-        button("일시정지 / 재개") { startService(HikeService.ACTION_PAUSE) }
-        button("종료") { startService(HikeService.ACTION_STOP) }
-        button("기록 지금 업로드") { UploadWorker.enqueue(this) }
-        root.addView(TextView(this).apply { text = "\n안내 항목 (다음 산행부터 적용)"; textSize = 16f })
+        }, 24)
+
+        add(Ui.section(this, "테스트 · 기록"), 8)
+        add(Ui.tonalButton(this, "시뮬레이션 (실내 테스트, 20배속)") { startService(HikeService.ACTION_SIM) })
+        add(Ui.tonalButton(this, "기록 지금 업로드") { UploadWorker.enqueue(this) }, 24)
+
+        add(Ui.section(this, "안내 항목 (다음 산행부터 적용)"), 8)
         val sp = getSharedPreferences("settings", MODE_PRIVATE)
-        fun toggle(key: String, label: String, default: Boolean) = root.addView(CheckBox(this).apply {
-            text = label; isChecked = sp.getBoolean(key, default)
+        val toggles = Ui.card(this)
+        fun toggle(key: String, label: String, default: Boolean) = toggles.addView(android.widget.Switch(this).apply {
+            text = label; textSize = 15f; setTextColor(getColor(R.color.fg))
+            minHeight = dp(48); isChecked = sp.getBoolean(key, default)
             setOnCheckedChangeListener { _, on -> sp.edit().putBoolean(key, on).apply() }
         })
         toggle("periodic", "정기 안내 (1킬로 또는 10분마다)", true)
         toggle("poi", "쉼터·명소 접근 안내", true)
         toggle("sunset", "일몰 임박 하산 권고", true)
         toggle("relative_pace", "평소 대비 페이스 (\"평소보다 10퍼센트 빨라요\")", false)
+        add(toggles, 0)
         setContentView(ScrollView(this).apply { addView(root) })
 
     }

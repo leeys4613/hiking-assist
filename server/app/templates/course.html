@@ -3,7 +3,13 @@
 {% block body %}
 <link rel="stylesheet" href="/static/leaflet/leaflet.css">
 <h1>{{ m.name }} · {{ c.name }}</h1>
-<p class="mut">{{ c.length_m|km }}km · 누적 상승 {{ c.ascent_m|round|int }}m · 표준 {{ c.std_minutes|hm }}{% if my_min %} / 내 예상 {{ my_min|hm }}{% endif %} · 오늘 일몰 {{ sunset }}</p>
+<div class="stats">
+  <div class="stat"><b>{{ c.length_m|km }}km</b><span>거리</span></div>
+  <div class="stat"><b>{{ c.ascent_m|round|int }}m</b><span>누적 상승</span></div>
+  <div class="stat"><b>{{ c.std_minutes|hm }}</b><span>표준 시간</span></div>
+  {% if my_min %}<div class="stat"><b>{{ my_min|hm }}</b><span>내 예상</span></div>{% endif %}
+  <div class="stat sun"><b>{{ sunset }}</b><span>오늘 일몰</span></div>
+</div>
 <div id="map"></div>
 <p>
   <button id="go" disabled>이 코스로 출발</button>
@@ -28,7 +34,7 @@
   const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, maxNativeZoom:18, attribution:'Tiles &copy; Esri'}).addTo(map);
   const topo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, maxNativeZoom:13, attribution:'Tiles &copy; Esri'});
   L.control.layers({'위성': sat, '지형(저해상도)': topo}).addTo(map);
-  const line = L.polyline(D.polyline, {color:'#ffeb3b', weight:5}).addTo(map);
+  const line = L.polyline(D.polyline, {color:'#f2a93b', weight:5}).addTo(map);
   map.fitBounds(line.getBounds().pad(0.1));
   L.circleMarker(D.summit, {radius:8, color:'#b71c1c', fillOpacity:1}).bindTooltip('정상').addTo(map);
   D.pois.forEach(p => { if (p.course_dist_m < 5000) L.circleMarker([p.lat,p.lon], {radius:5, color:'#26c6da', fillOpacity:1}).bindTooltip(p.name).addTo(map); });
