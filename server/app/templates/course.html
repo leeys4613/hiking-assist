@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ c.name }}{% endblock %}
+{% block body %}
+<link rel="stylesheet" href="/static/leaflet/leaflet.css">
+<h1>{{ m.name }} · {{ c.name }}</h1>
+<p class="mut">{{ c.length_m|km }}km · 누적 상승 {{ c.ascent_m|round|int }}m · 예상 {{ c.std_minutes|hm }}</p>
+<div id="map"></div>
+<p>
+  <button id="go" disabled>이 코스로 출발</button>
+  <span id="goNote" class="mut">앱(안드로이드)에서 열면 코스를 받아 산행을 시작할 수 있어요.</span>
+</p>
+<h2>산행 기록</h2>
+{% if hikes %}
+<table>
+  <tr><th>날짜</th><th>총 시간</th><th>정상까지</th><th>휴식</th><th>평균 페이스</th><th>걸음</th></tr>
+  {% for h in hikes %}
+  <tr><td><span style="color:var(--c{{ loop.index0 % 6 }})">●</span> {{ h.date }}</td><td>{{ h.total_s|hms }}</td><td>{{ h.summit_s|hms }}</td>
+      <td>{{ h.rest_count }}회 / {{ (h.rest_s // 60) }}분</td><td>{{ h.avg_pace_s_per_km|pace }}</td><td>{{ h.steps if h.steps is not none else '-' }}</td></tr>
+  {% endfor %}
+</table>
+{% else %}<p class="mut">아직 기록이 없어요. 산행 후 앱이 자동으로 올려요.</p>{% endif %}
+<style>:root{--c0:#e53935;--c1:#fb8c00;--c2:#8e24aa;--c3:#00acc1;--c4:#3949ab;--c5:#6d4c41}</style>
+<script src="/static/leaflet/leaflet.js"></script>
+<script id="data" type="application/json">{{ data_json|safe }}</script>
+<script>
+  const D = JSON.parse(document.getElementById('data').textContent);
+  const map = L.map('map');
+  const sat = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, maxNativeZoom:18, attribution:'Tiles &copy; Esri'}).addTo(map);
+  const topo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, maxNativeZoom:13, attribution:'Tiles &copy; Esri'});
+  L.control.layers({'위성': sat, '지형(저해상도)': topo}).addTo(map);
+  const line = L.polyline(D.polyline, {color:'#ffeb3b', weight:5}).addTo(map);
+  map.fitBounds(line.getBounds().pad(0.1));
+  L.circleMarker(D.summit, {radius:8, color:'#b71c1c', fillOpacity:1}).bindTooltip('정상').addTo(map);
+  D.pois.forEach(p => { if (p.course_dist_m < 5000) L.circleMarker([p.lat,p.lon], {radius:5, color:'#26c6da', fillOpacity:1}).bindTooltip(p.name).addTo(map); });
+  const colors = ['#e53935','#fb8c00','#8e24aa','#00acc1','#3949ab','#6d4c41'];
+  D.hikes.forEach((h,i) => L.polyline(h.pts, {color: colors[i % 6], weight:3, opacity:.9}).bindTooltip(h.date).addTo(map));
+  // 안드로이드 앱 WebView 에서만 JS 브리지가 있다
+  if (window.HikeApp) {
+    const b = document.getElementById('go'); b.disabled = false;
+    document.getElementById('goNote').textContent = '';
+    b.onclick = () => window.HikeApp.startCourse({{ c.id|tojson }});
+  }
+</script>
+{% endblock %}

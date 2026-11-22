@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>접속 토큰</h1>
+<form method="post" action="/login">
+  <p class="mut">서버에 설정한 토큰을 입력하세요. 이 브라우저에 쿠키로 저장됩니다.</p>
+  <input type="password" name="token" autocomplete="current-password" autofocus>
+  {% if error %}<p style="color:#c0392b">{{ error }}</p>{% endif %}
+  <p><button type="submit">들어가기</button></p>
+</form>
+{% endblock %}

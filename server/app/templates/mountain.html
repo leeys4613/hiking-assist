@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{{ m.name }}{% endblock %}
+{% block body %}
+<h1>{{ m.name }} 코스</h1>
+{% for c in courses %}
+<a class="card" href="/courses/{{ c.id }}">
+  <strong>{{ c.name }}</strong>{% if c.visited %}<span class="badge">✓ 다녀옴 {{ c.visits }}회</span>{% endif %}
+  <div class="mut">{{ (c.length_m)|km }}km · 누적 상승 {{ c.ascent_m }}m · 예상 {{ c.std_minutes|hm }}{% if c.my_minutes %} / 내 예상 {{ c.my_minutes|hm }}{% endif %}</div>
+</a>
+{% endfor %}
+{% endblock %}

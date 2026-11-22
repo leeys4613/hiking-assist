@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>산 선택</h1>
+{% for m in mountains %}
+<a class="card" href="/mountains/{{ m.id }}">
+  <strong>{{ m.name }}</strong>{% if m.visited %}<span class="badge">✓ {{ m.visits }}회</span>{% endif %}
+</a>
+{% else %}<p class="mut">등록된 산이 없어요.</p>{% endfor %}
+{% endblock %}

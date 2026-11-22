@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}등산 어시스턴트{% endblock %}</title>
+<style>
+  :root { --bg:#fafaf7; --fg:#1d2420; --mut:#66706a; --card:#fff; --line:#dfe3dc; --acc:#2e7d4f; --acc-fg:#fff; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14181a; --fg:#e6ebe7; --mut:#9aa59e; --card:#1d2325; --line:#2d3639; --acc:#58b57d; --acc-fg:#0d1a12; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.5 -apple-system,"Apple SD Gothic Neo","Noto Sans KR",sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 16px; }
+  a { color: var(--acc); }
+  h1 { font-size: 1.4rem; margin: .6rem 0 1rem; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px 16px; margin:10px 0; display:block; text-decoration:none; color:inherit; }
+  .mut { color: var(--mut); font-size:.9rem; }
+  .badge { display:inline-block; background:var(--acc); color:var(--acc-fg); border-radius:999px; padding:0 .6em; font-size:.8rem; margin-left:.4em; }
+  table { width:100%; border-collapse: collapse; font-size:.92rem; }
+  th, td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); }
+  button, .btn { background:var(--acc); color:var(--acc-fg); border:0; border-radius:10px; padding:.7em 1.1em; font-size:1rem; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  #map { height: 55vh; min-height: 320px; border-radius:12px; border:1px solid var(--line); }
+  input { font-size:1rem; padding:.6em; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); width:100%; }
+  nav a { margin-right: 1rem; }
+</style>
+</head>
+<body><main>
+<nav><a href="/">산 목록</a></nav>
+{% block body %}{% endblock %}
+</main></body>
+</html>
