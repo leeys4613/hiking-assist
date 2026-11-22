@@ -1,0 +1,47 @@
+{
+ "name": "rain_ahead",
+ "package": "suraksan_package.json",
+ "gpx": "rain_ahead.gpx",
+ "watch": [
+  "off_course",
+  "back",
+  "alt_route",
+  "off_trail",
+  "no_route",
+  "sunset",
+  "rain",
+  "summit",
+  "descent",
+  "end"
+ ],
+ "expect": [
+  {
+   "type": "rain",
+   "atS": 1800.0,
+   "tolS": 70,
+   "textContains": "1시간 뒤 강수확률 70퍼센트"
+  }
+ ],
+ "weather": [
+  {
+   "time": "2026-11-21T13:00+09:00",
+   "pop": 20
+  },
+  {
+   "time": "2026-11-21T14:00+09:00",
+   "pop": 30
+  },
+  {
+   "time": "2026-11-21T15:00+09:00",
+   "pop": 70
+  },
+  {
+   "time": "2026-11-21T16:00+09:00",
+   "pop": 80
+  },
+  {
+   "time": "2026-11-21T17:00+09:00",
+   "pop": 20
+  }
+ ]
+}

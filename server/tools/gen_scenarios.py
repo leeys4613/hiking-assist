@@ -20,7 +20,7 @@ OUT = REPO / "testdata" / "scenarios"
 KST = timezone(timedelta(hours=9))
 SPEED = 1.2          # m/s
 NOISE = 3.0          # m, 균일 ±
-WATCH = ["off_course", "back", "alt_route", "off_trail", "no_route", "sunset", "summit", "descent", "end"]
+WATCH = ["off_course", "back", "alt_route", "off_trail", "no_route", "sunset", "rain", "summit", "descent", "end"]
 
 
 # ------------------------------------------------------------------ 좌표계
@@ -222,6 +222,15 @@ def real_scenarios():
         {"type": "off_course", "atS": ev[0][0], "tolS": 2.5, "textContains": "코스를 벗어났어요"},
         {"type": "back", "atS": ev[1][0], "tolS": 2.5, "textContains": "돌아왔어요"},
     ])
+
+    # 10) 강수 예보: 13:30 출발, 15시부터 강수확률 70%/80% → 14:00(출발 30분 뒤)에 "1시간 뒤 강수확률 70퍼센트예요." 1회
+    dt = 3
+    raw = [{"t": float(i * dt), "x": path.at(1.0 * i * dt)[0], "y": path.at(1.0 * i * dt)[1]} for i in range(0, 700)]
+    s = finalize(raw, frame, 10)
+    weather = [{"time": f"2026-11-21T{h:02d}:00+09:00", "pop": p_} for h, p_ in ((13, 20), (14, 30), (15, 70), (16, 80), (17, 20))]
+    save("rain_ahead", "suraksan_package.json", frame, datetime(2026, 11, 21, 13, 30, tzinfo=KST), s, [
+        {"type": "rain", "atS": 1800.0, "tolS": 70, "textContains": "1시간 뒤 강수확률 70퍼센트"},
+    ], {"weather": weather})
 
     # 7) 일몰 임박: 14:30 출발 → 예상 하산 완료(약 2시간 40분 뒤)가 일몰 17:16 − 30분 이후 → 하산 권고 1회
     dt = 2

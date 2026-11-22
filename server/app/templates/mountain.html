@@ -12,6 +12,7 @@
 {% endblock %}
 {% block body %}
 <h1>{{ m.name }} 코스</h1>
+{% include "_weather.html" %}
 {% for c in courses %}
 <a class="card" href="/courses/{{ c.id }}">
   <strong>{{ c.name }}</strong>{% if c.visited %}<span class="badge">✓ 다녀옴 {{ c.visits }}회</span>{% endif %}

@@ -66,3 +66,13 @@ class GraphState(Base):
     enabled: Mapped[bool] = mapped_column(Boolean, default=False)
     report_json: Mapped[str] = mapped_column(Text)
     graph_json: Mapped[str] = mapped_column(Text)
+
+
+class WeatherCache(Base):
+    """격자(nx, ny)별 최근 강수확률 예보. 같은 발표분을 반복 호출하지 않고, API 장애 때 마지막 예보를 대신 쓴다."""
+    __tablename__ = "weather_cache"
+    nx: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ny: Mapped[int] = mapped_column(Integer, primary_key=True)
+    base: Mapped[str] = mapped_column(String)            # 발표분 YYYYMMDDHH00
+    fetched_at: Mapped[datetime] = mapped_column(DateTime)
+    hours_json: Mapped[str] = mapped_column(Text)        # [{"time": ISO, "pop": int}]

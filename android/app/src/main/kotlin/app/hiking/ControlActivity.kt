@@ -53,6 +53,7 @@ class ControlActivity : Activity() {
         })
         toggle("periodic", "정기 안내 (1킬로 또는 10분마다)", true)
         toggle("poi", "쉼터·명소 접근 안내", true)
+        toggle("weather", "강수 예보 (비 오기 1시간 전)", true)
         toggle("sunset", "일몰 임박 하산 권고", true)
         toggle("relative_pace", "평소 대비 페이스 (\"평소보다 10퍼센트 빨라요\")", false)
         setContentView(ScrollView(this).apply { addView(root) })
