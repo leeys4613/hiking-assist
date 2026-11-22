@@ -40,7 +40,7 @@
   const deg = {}; D.graph.edges.forEach(e => { deg[e.from] = (deg[e.from] || 0) + 1; deg[e.to] = (deg[e.to] || 0) + 1; });
   D.graph.nodes.forEach(n => { if (deg[n.id] === 1) L.circleMarker([n.lat, n.lon], {radius: 4, color: '#ff9800', fillOpacity: 1}).bindTooltip('막다른 끝').addTo(map); });
   D.report.candidates.forEach(c => L.polyline(c.coords, {color: '#fff', weight: 4, dashArray: '3 8'}).bindTooltip(c.id + ' ' + c.length_m + 'm').addTo(map));
-  L.polyline(D.course, {color: '#ffeb3b', weight: 7, opacity: .45}).bindTooltip('코스').addTo(map);
+  L.polyline(D.course, {color: '#f2a93b', weight: 7, opacity: .45}).bindTooltip('코스').addTo(map);
   map.fitBounds(all.getBounds().pad(0.05));
 </script>
 {% endblock %}

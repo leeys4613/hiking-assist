@@ -119,6 +119,7 @@ class HikeService : Service() {
             periodicEnabled = sp.getBoolean("periodic", true),
             poiEnabled = sp.getBoolean("poi", true),
             sunsetEnabled = sp.getBoolean("sunset", true),
+            weatherEnabled = sp.getBoolean("weather", true),
             relativePaceEnabled = sp.getBoolean("relative_pace", false),
         )
         // 패키지의 그래프(재경로), 일몰(하산 권고), 개인 페이스 모델도 함께 사용

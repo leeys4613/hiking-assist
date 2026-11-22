@@ -13,6 +13,7 @@ TOKEN = "test-token-123"
 @pytest.fixture()
 def client(monkeypatch):
     monkeypatch.setattr(config, "TOKEN", TOKEN)
+    monkeypatch.setattr(config, "KMA_KEY", "")      # 테스트는 .env 의 실제 키/네트워크에 의존하지 않는다(날씨 테스트는 자체 픽스처에서 지정)
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
     with TestClient(create_app(factory)) as c:   # with → startup(seed) 실행

@@ -119,6 +119,8 @@ def test_gpx_export_and_pages(client, auth):
     assert "수락산" in idx.text and "✓" in idx.text
     course = client.get(f"/courses/{COURSE}", headers=auth)
     assert course.status_code == 200 and "이 코스로 출발" in course.text and "window.HikeApp" in course.text
+    import re
+    assert re.search(r'startCourse\(.*, "\d{4}-\d{2}-\d{2}"\)', course.text)     # 화면에서 고른 날짜를 넘긴다
     data = json.loads(course.text.split('type="application/json">')[1].split("</script>")[0])
     assert len(data["polyline"]) > 2000 and len(data["hikes"]) == 1
     assert client.get("/mountains/suraksan", headers=auth).status_code == 200

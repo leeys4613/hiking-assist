@@ -24,4 +24,6 @@ DB_PATH = Path(os.environ.get("HIKING_DB", ROOT / "data" / "hiking.sqlite"))
 # 시드 코스 패키지(Phase 1 testdata). 서버 시작 시 DB 에 upsert 한다.
 GRAPH_DIR = REPO / "testdata" / "graphs"      # pipeline 이 만든 <산>.graph.json / .report.json
 SEED_PACKAGES = [REPO / "testdata" / "suraksan_package.json"]
+# 기상청 단기예보(공공데이터포털) 서비스 키. 없으면 날씨 기능만 꺼진다.
+KMA_KEY = os.environ.get("HIKING_KMA_KEY", "")
 COOKIE_NAME = "hiking_token"

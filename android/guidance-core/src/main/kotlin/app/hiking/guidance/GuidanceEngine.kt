@@ -22,6 +22,10 @@ data class GuidanceSettings(
     val offTrailRepeatS: Long = 30,
     /** 정기 안내에 "평소보다 N퍼센트 빨라요"를 덧붙인다(개인 페이스 모델이 있을 때만). 명세에서 선택 항목이라 기본 꺼짐 */
     val relativePaceEnabled: Boolean = false,
+    /** 저장된 예보에서 강수확률이 높은 시간대 1시간 전에 알려준다(명세 §5.2) */
+    val weatherEnabled: Boolean = true,
+    val rainPopThreshold: Int = 60,
+    val rainLeadMin: Long = 60,
     val sunsetEnabled: Boolean = true,
     /** 예상 하산 완료가 일몰 − 이 시간보다 늦으면 하산 권고(명세 §5.2: 30분) */
     val sunsetMarginMin: Long = 30,
@@ -42,11 +46,13 @@ class GuidanceEngine(
     graph: Graph? = null,
     /** 일몰 시각(epoch ms). null 이면 하산 권고를 하지 않는다 */
     private val sunsetMs: Long? = null,
+    /** 저장된 시간별 강수확률 예보 */
+    pkgWeather: List<WeatherPoint> = emptyList(),
 ) {
     /** 패키지에서 바로 만든다. */
     constructor(pkg: CoursePackage, settings: GuidanceSettings = GuidanceSettings()) : this(
         Course(pkg), pkg.mountain.name, pkg.pois, settings, pkg.graph,
-        parseSunset(pkg.sunset),
+        parseSunset(pkg.sunset), pkg.weather,
     )
 
     val queue = AnnouncementQueue(minGapMs = settings.minGapMs)
@@ -73,6 +79,12 @@ class GuidanceEngine(
     private var lastPeriodicDist = 0.0
     private var lastPeriodicMs = 0L
     private var lastSunsetCheckMs: Long? = null   // 오버플로를 피하려고 MIN_VALUE 센티넬을 쓰지 않는다
+
+    /** 강수확률이 임계값 이상인 연속 시간대(시작 ms, 끝 ms, 시작 시간대 pop). 시간대 하나는 [t, t+1시간) */
+    private class RainRun(val startMs: Long, val endMs: Long, val firstPop: Int, val slots: List<Pair<Long, Int>>)
+    private val rainRuns: List<RainRun> = buildRainRuns(pkgWeather, settings.rainPopThreshold)
+    private val rainDone = HashSet<Int>()
+    private var lastWeatherCheckMs: Long? = null
 
     private val detector = DepartureDetector(settings.departure)
     private val rerouter: Rerouter? = graph?.let {
@@ -160,6 +172,24 @@ class GuidanceEngine(
             finished = true
             emit("end", Priority.EVENT, "입구에 도착했어요. 수고하셨어요.", once = true)
             return out
+        }
+
+        // ---- 강수 예보 안내(§5.2): 강수확률이 높은 시간대 1시간 전(이미 그 시간대면 시작할 때) 한 번 ----
+        if (settings.weatherEnabled && rainRuns.isNotEmpty() && !descending &&
+            (lastWeatherCheckMs.let { it == null || fix.timeMs - it >= 60_000 })
+        ) {
+            lastWeatherCheckMs = fix.timeMs
+            rainRuns.forEachIndexed { i, run ->
+                if (i in rainDone || fix.timeMs >= run.endMs) { if (fix.timeMs >= run.endMs) rainDone += i; return@forEachIndexed }
+                if (fix.timeMs < run.startMs - settings.rainLeadMin * 60_000) return@forEachIndexed
+                rainDone += i
+                if (fix.timeMs < run.startMs) {
+                    emit("rain", Priority.EVENT, "${Fmt.duration((run.startMs - fix.timeMs) / 1000.0)} 뒤 강수확률 ${run.firstPop}퍼센트예요.")
+                } else {
+                    val pop = run.slots.lastOrNull { it.first <= fix.timeMs }?.second ?: run.firstPop
+                    emit("rain", Priority.EVENT, "지금 강수확률 ${pop}퍼센트 예보예요.")
+                }
+            }
         }
 
         // ---- 일몰 하산 권고(§5.2): 아직 오르는 중이고 예상 하산 완료가 일몰 − 30분보다 늦을 때 한 번 ----
@@ -264,6 +294,25 @@ class GuidanceEngine(
     }
 
     companion object {
+        private const val HOUR_MS = 3_600_000L
+
+        /** 임계값 이상인 연속 시간대를 하나의 구간으로 묶는다. 시각 형식이 틀린 점은 건너뛴다. */
+        private fun buildRainRuns(weather: List<WeatherPoint>, threshold: Int): List<RainRun> {
+            val slots = weather.mapNotNull { w ->
+                runCatching { OffsetDateTime.parse(w.time).toInstant().toEpochMilli() to w.pop }.getOrNull()
+            }.sortedBy { it.first }.filter { it.second >= threshold }
+            val runs = mutableListOf<RainRun>()
+            var cur = mutableListOf<Pair<Long, Int>>()
+            for (s in slots) {
+                if (cur.isNotEmpty() && s.first != cur.last().first + HOUR_MS) {
+                    runs += RainRun(cur.first().first, cur.last().first + HOUR_MS, cur.first().second, cur); cur = mutableListOf()
+                }
+                cur += s
+            }
+            if (cur.isNotEmpty()) runs += RainRun(cur.first().first, cur.last().first + HOUR_MS, cur.first().second, cur)
+            return runs
+        }
+
         /** ISO-8601(오프셋 포함) → epoch ms. 형식이 틀리면 null(하산 권고만 꺼진다) */
         fun parseSunset(s: String?): Long? =
             s?.let { runCatching { OffsetDateTime.parse(it).toInstant().toEpochMilli() }.getOrNull() }

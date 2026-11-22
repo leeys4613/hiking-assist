@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import gpxpy.gpx
@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from . import config, db as dbm, pace_model, stats, sun
 from .pace import CoursePace
+from weather import service as weather_service
 from .auth import require_token, token_ok
 from .models import Course, GraphState, Hike, Mountain, PaceState
 from .seed import seed
@@ -24,7 +25,7 @@ HERE = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(HERE / "templates"))
 
 
-def create_app(session_factory=None) -> FastAPI:
+def create_app(session_factory=None, weather_client=None) -> FastAPI:
     factory = session_factory or dbm.SessionLocal
 
     @asynccontextmanager
@@ -96,6 +97,10 @@ def create_app(session_factory=None) -> FastAPI:
         """저장된 패키지에 날짜별 일몰과 개인 페이스 모델을 얹어 앱에 내려줄 패키지를 만든다."""
         pkg = json.loads(c.package_json)
         pkg["sunset"] = sun.sunset_iso(c.mountain.lat, c.mountain.lon, day)
+        # 시간별 강수확률(POP). 앱은 저장된 예보로 "1시간 뒤 강수확률 70퍼센트예요"를 안내한다(오프라인 동작).
+        fc = weather_service.forecast_for(db, c.mountain.lat, c.mountain.lon, client=weather_client)
+        pkg["weather"] = weather_service.hours_for_date(fc, day)
+        pkg["weather_status"] = weather_service.status_for_date(fc, day)
         gs = db.get(GraphState, c.mountain_id)
         if gs and gs.enabled:       # 검증을 통과한 산에서만 그래프를 내려줘 앱의 재경로를 켠다(AC8)
             pkg["graph"] = json.loads(gs.graph_json)
@@ -170,6 +175,36 @@ def create_app(session_factory=None) -> FastAPI:
         if gs is None:
             raise HTTPException(404, "no graph for this mountain")
         return json.loads(gs.report_json)
+
+    WEATHER_NOTE = {
+        "no_key": "날씨 연동 전이에요 (서버에 기상청 키가 없어요).",
+        "error": "예보를 불러오지 못했어요.",
+        "no_forecast": "이 날짜는 예보 범위 밖이에요 (오늘부터 글피까지).",
+        "stale": "최신 예보를 받지 못해 지난 예보를 보여줘요.",
+    }
+
+    def weather_view(db: Session, m: Mountain, day) -> dict:
+        fc = weather_service.forecast_for(db, m.lat, m.lon, client=weather_client)
+        status = weather_service.status_for_date(fc, day)
+        hours = [{"hour": int(h["time"][11:13]), "pop": h["pop"]} for h in weather_service.hours_for_date(fc, day)
+                 if 6 <= int(h["time"][11:13]) <= 20]                 # 산행 시간대 06~20시만
+        today = sun.today_kst()
+        return {"date": day.isoformat(), "status": status, "note": WEATHER_NOTE.get(status, ""), "hours": hours,
+                "base": fc.base, "prev": (day - timedelta(days=1)).isoformat() if day > today else None,
+                "next": (day + timedelta(days=1)).isoformat() if day < today + timedelta(days=3) else None}
+
+    def parse_day(date: str | None):
+        try:
+            return datetime.strptime(date, "%Y-%m-%d").date() if date else sun.today_kst()
+        except ValueError:
+            raise HTTPException(422, "date must be YYYY-MM-DD")
+
+    @app.get("/api/weather", dependencies=auth)
+    def api_weather(mountain_id: str, date: str | None = None, db: Session = Depends(get_db)):
+        m = db.get(Mountain, mountain_id)
+        if m is None:
+            raise HTTPException(404, "mountain not found")
+        return weather_view(db, m, parse_day(date))
 
     @app.get("/api/pace-model", dependencies=auth)
     def api_pace_model(db: Session = Depends(get_db)):
@@ -251,14 +286,15 @@ def create_app(session_factory=None) -> FastAPI:
             "mountains": ms, "data_json": json.dumps(ms, ensure_ascii=False).replace("</", "<\\/")})
 
     @app.get("/mountains/{mountain_id}", response_class=HTMLResponse, dependencies=auth)
-    def page_mountain(mountain_id: str, request: Request, db: Session = Depends(get_db)):
+    def page_mountain(mountain_id: str, request: Request, date: str | None = None, db: Session = Depends(get_db)):
         m = db.get(Mountain, mountain_id)
         if m is None:
             raise HTTPException(404, "mountain not found")
         gs = db.get(GraphState, mountain_id)
         rep = json.loads(gs.report_json) if gs else None
         return templates.TemplateResponse(request, "mountain.html", {
-            "m": m, "courses": api_courses(mountain_id, db), "graph": gs, "report": rep})
+            "m": m, "courses": api_courses(mountain_id, db), "graph": gs, "report": rep,
+            "weather": weather_view(db, m, parse_day(date)), "base_path": f"/mountains/{mountain_id}"})
 
     @app.get("/mountains/{mountain_id}/graph", response_class=HTMLResponse, dependencies=auth)
     def page_graph(mountain_id: str, request: Request, db: Session = Depends(get_db)):
@@ -274,7 +310,7 @@ def create_app(session_factory=None) -> FastAPI:
             "m": m, "report": data["report"], "data_json": json.dumps(data, ensure_ascii=False).replace("</", "<\\/")})
 
     @app.get("/courses/{course_id}", response_class=HTMLResponse, dependencies=auth)
-    def page_course(course_id: str, request: Request, db: Session = Depends(get_db)):
+    def page_course(course_id: str, request: Request, date: str | None = None, db: Session = Depends(get_db)):
         c = db.get(Course, course_id)
         if c is None:
             raise HTTPException(404, "course not found")
@@ -287,6 +323,7 @@ def create_app(session_factory=None) -> FastAPI:
                 "pois": pkg.get("pois", []), "hikes": overlay}
         return templates.TemplateResponse(request, "course.html", {
             "c": c, "m": c.mountain, "hikes": [_hike_dict(h) for h in hikes],
+            "weather": weather_view(db, c.mountain, parse_day(date)), "base_path": f"/courses/{course_id}",
             "my_min": my_minutes(db, c), "sunset": sun.sunset_iso(c.mountain.lat, c.mountain.lon, sun.today_kst())[11:16],
             "data_json": json.dumps(data, ensure_ascii=False).replace("</", "<\\/"),
         })

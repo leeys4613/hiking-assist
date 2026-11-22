@@ -17,6 +17,10 @@ data class CoursePackage(
     val graph: Graph? = null,
     /** 서버가 학습한 개인 페이스(명세 §8). 없으면 순수 Tobler */
     @SerialName("pace_model") val paceModel: PaceModel? = null,
+    /** 시간별 강수확률(저장된 예보). 앱은 오프라인에서도 이 값으로 강수 안내를 한다 */
+    val weather: List<WeatherPoint> = emptyList(),
+    /** 서버가 알려 주는 예보 상태: ok | stale | no_forecast | no_key | error (표시용) */
+    @SerialName("weather_status") val weatherStatus: String? = null,
 ) {
     companion object {
         private val json = Json { ignoreUnknownKeys = true }
@@ -84,3 +88,7 @@ data class GradeBins(val edges: List<Double>, val factors: List<Double>) {
     /** Python bisect_right(edges, grade) 와 같다: grade 이하인 경계의 수 */
     fun binOf(grade: Double): Int = edges.count { it <= grade }
 }
+
+/** [time] 시각(+09:00 포함 ISO)부터 1시간 동안의 강수확률 [pop] (%) */
+@Serializable
+data class WeatherPoint(val time: String, val pop: Int)

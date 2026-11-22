@@ -1,0 +1,17 @@
+{# 시간별 강수확률 칩. weather: weather_view() 결과, base_path: 날짜 이동 링크의 기준 경로 #}
+<style>
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin:.4rem 0; }
+  .chip { border:1px solid var(--line); border-radius:999px; padding:3px 12px; font-size:.85rem; background:var(--acc-soft); color:var(--fg); }
+  .chip.hi { background:#c62828; color:#fff; border-color:#c62828; font-weight:700; }
+  .chip.mid { background:var(--card); border-color:var(--amber); }
+</style>
+<div class="card">
+  <strong>시간별 강수확률</strong> <span class="mut">{{ weather.date }}</span>
+  {% if weather.prev %}<a href="{{ base_path }}?date={{ weather.prev }}">◀ 전날</a>{% endif %}
+  {% if weather.next %}<a href="{{ base_path }}?date={{ weather.next }}">다음날 ▶</a>{% endif %}
+  {% if weather.hours %}
+  <div class="chips">{% for h in weather.hours %}<span class="chip {{ 'hi' if h['pop'] >= 60 else ('mid' if h['pop'] >= 30 else '') }}">{{ h.hour }}시 {{ h['pop'] }}%</span>{% endfor %}</div>
+  {% endif %}
+  {% if weather.note %}<div class="mut">{{ weather.note }}</div>{% endif %}
+  {% if weather.status == 'ok' and weather.hours %}<div class="mut">60% 이상은 빨강 · 앱이 1시간 전에 알려줘요</div>{% endif %}
+</div>
