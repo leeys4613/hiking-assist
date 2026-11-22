@@ -21,6 +21,13 @@ class ControlActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var statusBox: LinearLayout
     private var statusKey = ""
+    private lateinit var prepHeader: TextView
+    private lateinit var prepBox: LinearLayout
+    private lateinit var permBtn: android.view.View
+    private lateinit var battBtn: android.view.View
+    private var prepOpen = true
+    private var prepManual = false   // 사용자가 직접 펼침/접음을 눌렀으면 자동 접기를 멈춘다
+    private var prepTodo = 0
     private var speaker: Speaker? = null
 
     private fun granted(p: String) = checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
@@ -44,12 +51,21 @@ class ControlActivity : Activity() {
         half("종료", true) { startService(HikeService.ACTION_STOP) }
         add(row, 24)
 
-        add(Ui.section(this, "준비"), 8)
-        add(Ui.tonalButton(this, "1) 권한 허용 (위치 → 알림 → 항상 허용 순서)") { requestNextPermission() })
-        add(Ui.tonalButton(this, "2) 배터리 '제한 없음' 허용") { requestUnrestrictedBattery() })
-        add(Ui.tonalButton(this, "음성 테스트 (음악 켜고 눌러 보세요)") {
+        // 준비 영역: 점검이 모두 통과하면 접히고, 이미 허용된 항목의 버튼은 숨는다. 헤더를 누르면 직접 펼치고 접을 수 있다
+        prepHeader = Ui.section(this, "준비").apply {
+            minHeight = dp(40); gravity = Gravity.CENTER_VERTICAL
+            setOnClickListener { prepOpen = !prepOpen; prepManual = true; applyPrep() }
+        }
+        add(prepHeader, 0)
+        prepBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        permBtn = Ui.tonalButton(this, "1) 권한 허용 (위치 → 알림 → 항상 허용 순서)") { requestNextPermission() }
+        battBtn = Ui.tonalButton(this, "2) 배터리 '제한 없음' 허용") { requestUnrestrictedBattery() }
+        prepBox.addView(permBtn, Ui.margins(this, bottom = 8))
+        prepBox.addView(battBtn, Ui.margins(this, bottom = 8))
+        prepBox.addView(Ui.tonalButton(this, "음성 테스트 (음악 켜고 눌러 보세요)") {
             speaker?.speak("정상까지 2.3킬로, 약 55분 남았어요. 현재 페이스 킬로당 22분이에요.") { }
-        }, 24)
+        }, Ui.margins(this, bottom = 8))
+        add(prepBox, 16)
 
         add(Ui.section(this, "테스트 · 기록"), 8)
         add(Ui.tonalButton(this, "시뮬레이션 (실내 테스트, 20배속)") { startService(HikeService.ACTION_SIM) })
@@ -113,7 +129,21 @@ class ControlActivity : Activity() {
             upload = UploadWorker.lastStatus(this).toString(),
             samsungHint = !unrestricted,
         )
+        prepTodo = listOf(fine, bg, notif, unrestricted).count { !it }
+        permBtn.visibility = if (fine && bg && notif) android.view.View.GONE else android.view.View.VISIBLE
+        battBtn.visibility = if (unrestricted) android.view.View.GONE else android.view.View.VISIBLE
+        if (!prepManual) prepOpen = prepTodo > 0
+        applyPrep()
         handler.postDelayed({ refresh() }, 1000)
+    }
+
+    private fun applyPrep() {
+        prepBox.visibility = if (prepOpen) android.view.View.VISIBLE else android.view.View.GONE
+        // 접힌 동안은 prepBox 의 아래 여백도 사라지므로 헤더가 대신 간격을 둔다
+        (prepHeader.layoutParams as LinearLayout.LayoutParams).bottomMargin = if (prepOpen) 0 else dp(16)
+        prepHeader.requestLayout()
+        val summary = if (prepTodo == 0) "모두 완료" else "확인 $prepTodo"
+        prepHeader.text = "준비 · $summary  ${if (prepOpen) "▾" else "▸"}"
     }
 
     private class Check(val label: String, val value: String, val ok: Boolean)
