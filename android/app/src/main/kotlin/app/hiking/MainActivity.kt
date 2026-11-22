@@ -65,6 +65,7 @@ class MainActivity : Activity() {
 
         // 디버그 빌드 전용: `adb shell am start -n app.hiking/.MainActivity --ez sim true` 로 시뮬레이션 자동 시작
         val debuggable = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+        if (debuggable && intent?.getBooleanExtra("upload", false) == true) UploadWorker.enqueue(this)
         if (debuggable && intent?.getBooleanExtra("sim", false) == true) {
             startForegroundService(Intent(this, HikeService::class.java).setAction(HikeService.ACTION_SIM))
         }
