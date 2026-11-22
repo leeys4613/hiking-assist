@@ -39,3 +39,4 @@ docs/mountain/
 docs/mountain.zip
 testdata/raw/
 server/data/raw/
+.kotlin/
